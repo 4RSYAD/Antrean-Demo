@@ -1,0 +1,6 @@
+{
+  "name": "Antrean",
+  "description": "Sistem antrean cuci kendaraan dengan dashboard kasir, kontrol pit bay, display TV ruang tunggu, panggilan suara otomatis, dan cetak struk thermal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
