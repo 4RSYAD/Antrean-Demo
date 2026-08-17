@@ -76,7 +76,7 @@ export function generateEmailHtml(payload: EmailNotificationPayload): {
       alertBox = `
         <div style="background-color: #ECFDF5; border-left: 4px solid #10B981; padding: 14px 16px; border-radius: 8px; margin: 20px 0; color: #065F46;">
           <p style="margin: 0; font-size: 14px; font-weight: 600;">Status: <strong>Menunggu Giliran</strong></p>
-          <p style="margin: 4px 0 0 0; font-size: 13px; color: #047857;">Perhatikan layar TV Display di ruang tunggu atau tunggu panggilan dari operator kami.</p>
+          <p style="margin: 4px 0 0 0; font-size: 13px; color: #047857;">Perhatikan Layar Ruang Tunggu atau tunggu panggilan dari operator kami.</p>
         </div>
       `;
       break;

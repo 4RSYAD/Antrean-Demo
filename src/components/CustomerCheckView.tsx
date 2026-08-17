@@ -61,9 +61,9 @@ export const CustomerCheckView: React.FC<CustomerCheckViewProps> = ({
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-2xl mx-auto space-y-4 sm:space-y-6">
       {/* Search Header Card */}
-      <div className="bg-white dark:bg-[#0F121C] border border-slate-200 dark:border-[#23293D] p-6 sm:p-8 rounded-3xl space-y-6 text-center shadow-lg">
+      <div className="bg-white dark:bg-[#0F121C] border border-slate-200 dark:border-[#23293D] p-4 sm:p-8 rounded-2xl sm:rounded-3xl space-y-5 sm:space-y-6 text-center shadow-lg">
         <div className="w-14 h-14 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
           <Search className="w-7 h-7" />
         </div>

@@ -213,7 +213,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <SidebarItem
                 id="nav-tv"
                 icon={<Tv className="w-4 h-4 shrink-0" />}
-                label="Layar Display TV"
+                label="Layar Ruang Tunggu"
                 active={currentView === 'tv'}
                 onClick={() => handleNavClick('tv')}
                 collapsed={!isExpanded}
@@ -251,7 +251,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <SidebarItem
                 id="nav-tv"
                 icon={<Tv className="w-4 h-4 shrink-0" />}
-                label="Layar Display TV"
+                label="Layar Ruang Tunggu"
                 active={currentView === 'tv'}
                 onClick={() => handleNavClick('tv')}
                 collapsed={!isExpanded}
@@ -273,7 +273,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <SidebarItem
                 id="nav-tv"
                 icon={<Tv className="w-4 h-4 shrink-0" />}
-                label="Layar Display TV"
+                label="Layar Ruang Tunggu"
                 active={currentView === 'tv'}
                 onClick={() => handleNavClick('tv')}
                 collapsed={!isExpanded}

@@ -453,7 +453,7 @@ export default function App() {
   };
 
   // Add Queue
-  const handleAddQueue = (data: {
+  const handleAddQueue = async (data: {
     nama_pemohon: string;
     email?: string;
     phone?: string;
@@ -461,9 +461,23 @@ export default function App() {
     layanan_id: string;
     pit_id?: string | null;
     notes?: string;
-  }) => {
+  }): Promise<QueueItem> => {
     const today = new Date().toISOString().split('T')[0];
-    const todayQueues = queues.filter((q) => q.created_at.startsWith(today));
+    
+    // Fetch latest live queues from Supabase if connected to avoid ticket sequence race conditions
+    let liveQueuesList = queues;
+    if (isSupabaseConnected) {
+      try {
+        const live = await syncQueuesFromSupabase();
+        if (live && live.length > 0) {
+          liveQueuesList = live;
+        }
+      } catch (err) {
+        console.warn('Fallback calculating sequence from local state', err);
+      }
+    }
+
+    const todayQueues = liveQueuesList.filter((q) => q.created_at && q.created_at.startsWith(today));
     const nextNumber = todayQueues.length + 1;
     const nomor_antrian = `A${String(nextNumber).padStart(3, '0')}`;
 
@@ -493,8 +507,14 @@ export default function App() {
       created_at: new Date().toISOString()
     };
 
-    setQueues((prev) => [newQueue, ...prev]);
-    upsertQueueToSupabase(newQueue);
+    // Update state immediately
+    setQueues((prev) => [newQueue, ...prev.filter((q) => q.id !== newQueue.id)]);
+
+    // Persist directly to Supabase cloud
+    const savedToCloud = await upsertQueueToSupabase(newQueue);
+    if (savedToCloud) {
+      console.log(`[Supabase] Tiket ${nomor_antrian} berhasil disimpan ke tabel queues di Supabase Cloud.`);
+    }
 
     // Auto-send Email Stage 1: ticket_created
     if (newQueue.email) {
@@ -510,7 +530,10 @@ export default function App() {
       }, 700);
     }
 
-    showToast(`Antrean ${nomor_antrian} berhasil didaftarkan!`, 'success');
+    showToast(
+      `Antrean ${nomor_antrian} berhasil didaftarkan${savedToCloud ? ' (Tersimpan di Supabase Cloud)' : ''}!`,
+      'success'
+    );
     return newQueue;
   };
 
@@ -799,7 +822,7 @@ export default function App() {
         />
 
         {/* View Routing */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-6">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-6 md:p-8 space-y-4 sm:space-y-6">
           {/* Dashboard Overview (Admin & Kasir) */}
           {(authUser?.role === 'admin' || authUser?.role === 'kasir' || (role === 'admin' && authUser?.is_logged_in)) &&
             currentView === 'dashboard' && (
@@ -937,8 +960,8 @@ export default function App() {
           {(!authUser?.is_logged_in || authUser?.role === 'pengguna') && currentView === 'register' && (
             <CustomerRegisterView
               services={services}
-              onAddQueue={(data) => {
-                const created = handleAddQueue(data);
+              onAddQueue={async (data) => {
+                const created = await handleAddQueue(data);
                 setCurrentView('tv');
                 return created;
               }}

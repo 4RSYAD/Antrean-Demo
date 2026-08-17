@@ -218,8 +218,13 @@ export async function syncQueuesFromSupabase(): Promise<QueueItem[] | null> {
     const { data, error } = await client
       .from('queues')
       .select('*')
-      .order('created_timestamp', { ascending: false, nullsFirst: false });
-    if (error) throw error;
+      .order('created_at', { ascending: false });
+    if (error) {
+      // Fallback in case created_at is stored differently
+      const { data: fbData, error: fbErr } = await client.from('queues').select('*');
+      if (fbErr) throw fbErr;
+      return (fbData as QueueItem[]) || [];
+    }
     return (data as QueueItem[]) || [];
   } catch (err) {
     console.warn('Sync queues from Supabase error:', err);
@@ -231,8 +236,39 @@ export async function upsertQueueToSupabase(item: QueueItem): Promise<boolean> {
   const client = getSupabaseClient();
   if (!client) return false;
   try {
-    const { error } = await client.from('queues').upsert(item, { onConflict: 'id' });
-    if (error) throw error;
+    const payload: any = {
+      id: item.id,
+      nomor_antrian: item.nomor_antrian,
+      nama_pemohon: item.nama_pemohon,
+      email: item.email || null,
+      phone: item.phone || null,
+      tipe_motor: item.tipe_motor || 'kecil',
+      layanan_id: item.layanan_id,
+      total_biaya: item.total_biaya || 0,
+      status: item.status || 'waiting',
+      pit_id: item.pit_id || null,
+      notes: item.notes || '',
+      is_paid: !!item.is_paid,
+      paid_at: item.paid_at || null,
+      cashier_name: item.cashier_name || null,
+      created_at: item.created_at || new Date().toISOString(),
+      washed_at: item.washed_at || null,
+      completed_at: item.completed_at || null
+    };
+
+    const { error } = await client.from('queues').upsert(payload, { onConflict: 'id' });
+    if (error) {
+      // If error is about missing columns (e.g. email or phone in older tables), retry without optional columns
+      if (error.message?.includes('email') || error.message?.includes('phone')) {
+        const fallback = { ...payload };
+        delete fallback.email;
+        delete fallback.phone;
+        const { error: fbErr } = await client.from('queues').upsert(fallback, { onConflict: 'id' });
+        if (fbErr) throw fbErr;
+        return true;
+      }
+      throw error;
+    }
     return true;
   } catch (err) {
     console.warn('Upsert queue to Supabase error:', err);
@@ -348,7 +384,10 @@ export async function syncSettingsFromSupabase(): Promise<StoreSettings | null> 
         alamat: data.alamat,
         telepon: data.telepon,
         footer_struk: data.footer_struk,
-        auto_voice: data.auto_voice ?? true
+        auto_voice: data.auto_voice ?? true,
+        resend_api_key: data.resend_api_key || '',
+        resend_from_email: data.resend_from_email || 'notif@antrean.online',
+        email_notifications_enabled: data.email_notifications_enabled ?? true
       };
     }
     return null;
@@ -362,17 +401,37 @@ export async function upsertSettingsToSupabase(settings: StoreSettings): Promise
   const client = getSupabaseClient();
   if (!client) return false;
   try {
-    const payload = {
+    const payload: any = {
       id: 'main_settings',
       nama_usaha: settings.nama_usaha,
       tagline: settings.tagline,
       alamat: settings.alamat,
       telepon: settings.telepon,
       footer_struk: settings.footer_struk,
-      auto_voice: settings.auto_voice
+      auto_voice: settings.auto_voice,
+      resend_api_key: settings.resend_api_key || '',
+      resend_from_email: settings.resend_from_email || 'notif@antrean.online',
+      email_notifications_enabled: settings.email_notifications_enabled ?? true
     };
     const { error } = await client.from('store_settings').upsert(payload, { onConflict: 'id' });
-    if (error) throw error;
+    if (error) {
+      // Fallback for older schemas without resend columns
+      if (error.message?.includes('resend') || error.message?.includes('email')) {
+        const fallback = {
+          id: 'main_settings',
+          nama_usaha: settings.nama_usaha,
+          tagline: settings.tagline,
+          alamat: settings.alamat,
+          telepon: settings.telepon,
+          footer_struk: settings.footer_struk,
+          auto_voice: settings.auto_voice
+        };
+        const { error: fbErr } = await client.from('store_settings').upsert(fallback, { onConflict: 'id' });
+        if (fbErr) throw fbErr;
+        return true;
+      }
+      throw error;
+    }
     return true;
   } catch (err) {
     console.warn('Upsert settings to Supabase error:', err);
@@ -587,12 +646,14 @@ CREATE TABLE IF NOT EXISTS queues (
   id TEXT PRIMARY KEY,
   nomor_antrian TEXT NOT NULL,
   nama_pemohon TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
   tipe_motor TEXT NOT NULL DEFAULT 'kecil',
   layanan_id TEXT NOT NULL,
   total_biaya NUMERIC NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'waiting',
   pit_id TEXT,
-  created_at TEXT NOT NULL DEFAULT to_char(now(), 'HH24:MI'),
+  created_at TEXT NOT NULL DEFAULT to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS'),
   washed_at TEXT,
   completed_at TEXT,
   notes TEXT,
@@ -601,6 +662,16 @@ CREATE TABLE IF NOT EXISTS queues (
   cashier_name TEXT,
   created_timestamp TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migration safety for queues
+ALTER TABLE queues ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE queues ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE queues ADD COLUMN IF NOT EXISTS is_paid BOOLEAN DEFAULT FALSE;
+ALTER TABLE queues ADD COLUMN IF NOT EXISTS paid_at TEXT;
+ALTER TABLE queues ADD COLUMN IF NOT EXISTS cashier_name TEXT;
+ALTER TABLE queues ADD COLUMN IF NOT EXISTS washed_at TEXT;
+ALTER TABLE queues ADD COLUMN IF NOT EXISTS completed_at TEXT;
+ALTER TABLE queues ADD COLUMN IF NOT EXISTS created_timestamp TIMESTAMPTZ DEFAULT NOW();
 
 -- 2. Buat Tabel Layanan & Tarif (Services)
 CREATE TABLE IF NOT EXISTS services (
@@ -615,6 +686,9 @@ CREATE TABLE IF NOT EXISTS services (
   icon TEXT,
   badge TEXT
 );
+
+-- Migration safety for services
+ALTER TABLE services ADD COLUMN IF NOT EXISTS harga_mobil NUMERIC DEFAULT 0;
 
 -- 3. Buat Tabel Pit Cuci (Pits)
 CREATE TABLE IF NOT EXISTS pits (
@@ -639,6 +713,10 @@ CREATE TABLE IF NOT EXISTS users (
   last_login TIMESTAMPTZ
 );
 
+-- Migration safety for users
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN DEFAULT TRUE;
+
 -- 5. Buat Tabel Pengaturan Toko & Struk (Store Settings)
 CREATE TABLE IF NOT EXISTS store_settings (
   id TEXT PRIMARY KEY DEFAULT 'main_settings',
@@ -647,8 +725,16 @@ CREATE TABLE IF NOT EXISTS store_settings (
   alamat TEXT DEFAULT 'Jl. Otomotif Raya No. 88, Jakarta Selatan',
   telepon TEXT DEFAULT '0812-3456-7890',
   footer_struk TEXT DEFAULT 'Simpan struk ini untuk tanda bukti pengambilan kendaraan. Terima Kasih atas Kunjungan Anda!',
-  auto_voice BOOLEAN DEFAULT TRUE
+  auto_voice BOOLEAN DEFAULT TRUE,
+  resend_api_key TEXT,
+  resend_from_email TEXT DEFAULT 'notif@antrean.online',
+  email_notifications_enabled BOOLEAN DEFAULT TRUE
 );
+
+-- Migration safety for store_settings
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS resend_api_key TEXT;
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS resend_from_email TEXT DEFAULT 'notif@antrean.online';
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS email_notifications_enabled BOOLEAN DEFAULT TRUE;
 
 -- ==========================================================
 -- 6. Data Awal (Seed Data)
@@ -725,3 +811,4 @@ ALTER PUBLICATION supabase_realtime ADD TABLE pits;
 ALTER PUBLICATION supabase_realtime ADD TABLE users;
 ALTER PUBLICATION supabase_realtime ADD TABLE store_settings;
 `;
+

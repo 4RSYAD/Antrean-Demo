@@ -45,6 +45,26 @@
   background: #94A3B8;
 }
 
+/* Smooth Running Text / Marquee Animation for Layar Ruang Tunggu */
+@keyframes marquee-scroll {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  display: flex;
+  width: max-content;
+  animation: marquee-scroll 32s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
 /* Thermal Print and PDF styles */
 @media print {
   body * {

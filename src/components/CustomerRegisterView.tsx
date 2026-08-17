@@ -9,7 +9,7 @@ interface CustomerRegisterViewProps {
     email?: string;
     tipe_motor: MotorType;
     layanan_id: string;
-  }) => void;
+  }) => Promise<any> | void;
 }
 
 export const CustomerRegisterView: React.FC<CustomerRegisterViewProps> = ({
@@ -21,6 +21,7 @@ export const CustomerRegisterView: React.FC<CustomerRegisterViewProps> = ({
   const [tipeMotor, setTipeMotor] = useState<MotorType>('kecil');
   const [layananId, setLayananId] = useState(services[0]?.id || '');
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const selectedService = services.find((s) => s.id === layananId) || services[0];
   const currentPrice = selectedService
@@ -37,24 +38,28 @@ export const CustomerRegisterView: React.FC<CustomerRegisterViewProps> = ({
     return 'Motor Kecil';
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!namaPemohon.trim() || !layananId) return;
+    if (!namaPemohon.trim() || !layananId || isSubmitting) return;
 
-    onAddQueue({
-      nama_pemohon: namaPemohon.trim(),
-      email: email.trim() || undefined,
-      tipe_motor: tipeMotor,
-      layanan_id: layananId
-    });
-
-    setNamaPemohon('');
-    setEmail('');
+    setIsSubmitting(true);
+    try {
+      await onAddQueue({
+        nama_pemohon: namaPemohon.trim(),
+        email: email.trim() || undefined,
+        tipe_motor: tipeMotor,
+        layanan_id: layananId
+      });
+      setNamaPemohon('');
+      setEmail('');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <div className="bg-white dark:bg-[#0F121C] border border-slate-200 dark:border-[#23293D] p-6 sm:p-8 rounded-3xl space-y-6 shadow-lg">
+    <div className="max-w-2xl mx-auto space-y-4 sm:space-y-6">
+      <div className="bg-white dark:bg-[#0F121C] border border-slate-200 dark:border-[#23293D] p-4 sm:p-8 rounded-2xl sm:rounded-3xl space-y-5 sm:space-y-6 shadow-lg">
         {/* Header */}
         <div className="flex items-center space-x-4 border-b border-slate-200 dark:border-[#23293D] pb-4">
           <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shadow-inner">
@@ -249,10 +254,24 @@ export const CustomerRegisterView: React.FC<CustomerRegisterViewProps> = ({
             <button
               id="btn-submit-new-ticket"
               type="submit"
-              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-2xl transition shadow-lg text-sm flex items-center justify-center space-x-2 cursor-pointer"
+              disabled={isSubmitting}
+              className={`w-full font-black py-4 rounded-2xl transition shadow-lg text-sm flex items-center justify-center space-x-2 ${
+                isSubmitting
+                  ? 'bg-slate-400 dark:bg-slate-700 cursor-not-allowed text-white'
+                  : 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer'
+              }`}
             >
-              <PlusCircle className="w-5 h-5 text-white" />
-              <span>Ambil Tiket Antrean Sekarang</span>
+              {isSubmitting ? (
+                <div className="flex items-center space-x-2">
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Menyimpan ke Cloud Supabase...</span>
+                </div>
+              ) : (
+                <>
+                  <PlusCircle className="w-5 h-5 text-white" />
+                  <span>Ambil Tiket Antrean Sekarang</span>
+                </>
+              )}
             </button>
             <p className="text-center text-[11px] text-slate-500 dark:text-slate-400">
               Setelah mendaftar, Anda akan langsung diarahkan ke <strong>Layar Ruang Tunggu</strong> untuk memantau status panggilan antrean secara langsung.

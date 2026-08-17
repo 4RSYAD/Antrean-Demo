@@ -64,29 +64,40 @@ export const TVDisplayView: React.FC<TVDisplayViewProps> = ({
   };
 
   return (
-    <div id="tv-display-container" className="space-y-6">
+    <div id="tv-display-container" className="space-y-4 sm:space-y-6">
       {/* TV Header Banner */}
       <div className="bg-gradient-to-r from-[#0F121C] via-[#161A28] to-[#0F121C] border border-[#23293D] p-4 sm:p-6 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-4 shadow-2xl relative">
-        <div className="flex items-center space-x-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-500 to-lime-400 flex items-center justify-center text-slate-950 font-black shadow-lg">
-            <Droplets className="w-8 h-8 text-slate-950" />
+        <div className="flex items-center space-x-3 sm:space-x-4 w-full md:w-auto justify-between md:justify-start">
+          <div className="flex items-center space-x-3">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-emerald-500 to-lime-400 flex items-center justify-center text-slate-950 font-black shadow-lg shrink-0">
+              <Droplets className="w-6 h-6 sm:w-8 sm:h-8 text-slate-950" />
+            </div>
+            <div>
+              <h1 className="text-lg sm:text-2xl font-black text-white tracking-tight flex items-center space-x-2 leading-tight">
+                <span>LAYAR RUANG TUNGGU</span>
+              </h1>
+              <p className="text-[10px] sm:text-xs text-emerald-400 font-mono font-bold uppercase tracking-wider">
+                MONITOR STATUS CUCI KENDARAAN REAL-TIME
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center space-x-2">
-              <span>ANTREAN</span>
-            </h1>
-            <p className="text-xs text-emerald-400 font-mono font-bold uppercase tracking-widest">
-              DISPLAY INFORMASI STATUS CUCI KENDARAAN RUANG TUNGGU
-            </p>
-          </div>
+
+          <button
+            id="btn-toggle-fullscreen-mobile"
+            onClick={toggleFullscreen}
+            className="md:hidden p-2.5 rounded-2xl bg-[#1E2336] hover:bg-[#23293D] text-slate-300 transition cursor-pointer shrink-0"
+            title="Toggle Layar Penuh"
+          >
+            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          </button>
         </div>
 
-        <div className="flex items-center space-x-4">
-          <div className="text-center md:text-right font-mono">
-            <div className="text-2xl sm:text-4xl font-black text-lime-400 tracking-tight">
+        <div className="flex items-center justify-between md:justify-end space-x-4 w-full md:w-auto border-t md:border-t-0 pt-2 md:pt-0 border-[#23293D]/60">
+          <div className="text-left md:text-right font-mono">
+            <div className="text-2xl sm:text-4xl font-black text-lime-400 tracking-tight leading-none">
               {timeString}
             </div>
-            <div className="text-xs text-slate-400 font-sans font-semibold">
+            <div className="text-[11px] sm:text-xs text-slate-400 font-sans font-semibold mt-0.5">
               {dateString}
             </div>
           </div>
@@ -94,7 +105,7 @@ export const TVDisplayView: React.FC<TVDisplayViewProps> = ({
           <button
             id="btn-toggle-fullscreen"
             onClick={toggleFullscreen}
-            className="p-3 rounded-2xl bg-[#1E2336] hover:bg-[#23293D] text-slate-300 transition cursor-pointer"
+            className="hidden md:flex p-3 rounded-2xl bg-[#1E2336] hover:bg-[#23293D] text-slate-300 transition cursor-pointer"
             title="Toggle Layar Penuh (Fullscreen)"
           >
             {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
@@ -326,14 +337,24 @@ export const TVDisplayView: React.FC<TVDisplayViewProps> = ({
       </div>
 
       {/* Running Information Ticker */}
-      <div className="bg-[#0F121C] border border-[#23293D] rounded-2xl p-3 flex items-center space-x-3 overflow-hidden shadow-lg">
-        <span className="bg-emerald-500 text-slate-950 text-[10px] font-black font-mono uppercase px-3 py-1 rounded-xl shrink-0">
-          INFORMASI
-        </span>
-        <div className="whitespace-nowrap overflow-hidden text-xs font-mono text-slate-300">
-          <span>
-            Selamat datang di Antrean Wash Digital • Harap perhatikan nomor antrean yang terpampang pada layar dan panggilan speaker • Kendaraan yang telah selesai dicuci silakan menuju ke kasir untuk pembayaran dan pengambilan • Terima kasih!
-          </span>
+      <div
+        id="tv-running-ticker"
+        className="bg-[#0F121C] border border-[#23293D] rounded-2xl p-2.5 sm:p-3 flex items-center space-x-3 overflow-hidden shadow-lg relative"
+      >
+        <div className="flex items-center space-x-1.5 bg-emerald-500 text-slate-950 text-[10px] sm:text-xs font-black font-mono uppercase px-3 py-1.5 rounded-xl shrink-0 z-10 shadow-md">
+          <span className="w-2 h-2 rounded-full bg-slate-950 animate-ping inline-block" />
+          <span>INFORMASI</span>
+        </div>
+
+        <div className="flex-1 overflow-hidden relative select-none">
+          <div className="animate-marquee whitespace-nowrap text-xs sm:text-sm font-mono text-slate-200 cursor-default">
+            <span className="mx-6 inline-block">
+              📢 <strong>Selamat datang di Antrean Wash Digital</strong> • Harap perhatikan nomor antrean yang terpampang pada Layar Ruang Tunggu dan dengarkan panggilan suara speaker • Kendaraan yang telah selesai dicuci silakan menuju meja kasir untuk pembayaran & pengambilan kendaraan • Buka antrean melalui HP untuk cek progres mandiri • Terima kasih!
+            </span>
+            <span className="mx-6 inline-block">
+              📢 <strong>Selamat datang di Antrean Wash Digital</strong> • Harap perhatikan nomor antrean yang terpampang pada Layar Ruang Tunggu dan dengarkan panggilan suara speaker • Kendaraan yang telah selesai dicuci silakan menuju meja kasir untuk pembayaran & pengambilan kendaraan • Buka antrean melalui HP untuk cek progres mandiri • Terima kasih!
+            </span>
+          </div>
         </div>
       </div>
     </div>
