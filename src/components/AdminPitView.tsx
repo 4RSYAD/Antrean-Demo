@@ -10,9 +10,11 @@ import {
   Sparkles,
   ArrowRight,
   Bike,
-  Car
+  Car,
+  Mail,
+  BellRing
 } from 'lucide-react';
-import { QueueItem, ServiceItem, PitItem, QueueStatus } from '../types.ts';
+import { QueueItem, ServiceItem, PitItem, QueueStatus, EmailNotificationType } from '../types.ts';
 import { announceQueueVoice } from '../utils/audio.ts';
 
 interface AdminPitViewProps {
@@ -23,6 +25,7 @@ interface AdminPitViewProps {
   onUpdateStatus: (id: string, newStatus: QueueStatus, pitId?: string | null) => void;
   onDeleteQueue: (id: string) => void;
   onPrintReceipt: (item: QueueItem) => void;
+  onSendEmailNotification?: (type: EmailNotificationType, queue: QueueItem) => void;
 }
 
 export const AdminPitView: React.FC<AdminPitViewProps> = ({
@@ -32,7 +35,8 @@ export const AdminPitView: React.FC<AdminPitViewProps> = ({
   onCallNext,
   onUpdateStatus,
   onDeleteQueue,
-  onPrintReceipt
+  onPrintReceipt,
+  onSendEmailNotification
 }) => {
   const [selectedPitId, setSelectedPitId] = useState<string>(pits[0]?.id || '');
   const selectedPit = pits.find((p) => p.id === selectedPitId) || pits[0];
@@ -183,7 +187,7 @@ export const AdminPitView: React.FC<AdminPitViewProps> = ({
           </div>
 
           {/* Action Control Buttons */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-2">
             <button
               id="btn-call-next-in-pit"
               onClick={() => onCallNext(selectedPit?.id || '')}
@@ -201,8 +205,20 @@ export const AdminPitView: React.FC<AdminPitViewProps> = ({
                   className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-3.5 px-4 rounded-2xl transition shadow-md text-xs flex items-center justify-center space-x-2 cursor-pointer"
                 >
                   <Volume2 className="w-4 h-4 text-slate-950" />
-                  <span>Panggil Ulang Suara</span>
+                  <span>Panggil Suara</span>
                 </button>
+
+                {activeInPit.email && onSendEmailNotification && (
+                  <button
+                    id="btn-send-email-calling-pit"
+                    onClick={() => onSendEmailNotification('calling_pit', activeInPit)}
+                    className="bg-blue-600 hover:bg-blue-500 text-white font-black py-3.5 px-4 rounded-2xl transition shadow-md text-xs flex items-center justify-center space-x-2 cursor-pointer"
+                    title={`Kirim Ulang Email Panggilan Pit ke ${activeInPit.email}`}
+                  >
+                    <Mail className="w-4 h-4 text-white" />
+                    <span>Kirim Email Pit</span>
+                  </button>
+                )}
 
                 <button
                   id="btn-mark-wash-done"
@@ -210,7 +226,7 @@ export const AdminPitView: React.FC<AdminPitViewProps> = ({
                   className="bg-orange-600 hover:bg-orange-500 text-white font-black py-3.5 px-4 rounded-2xl transition shadow-md text-xs flex items-center justify-center space-x-2 cursor-pointer"
                 >
                   <CheckCircle className="w-4 h-4 text-white" />
-                  <span>Selesai Cuci (Ke Kasir)</span>
+                  <span>Selesai Cuci</span>
                 </button>
               </>
             )}
@@ -267,6 +283,17 @@ export const AdminPitView: React.FC<AdminPitViewProps> = ({
                       </div>
 
                       <div className="flex items-center space-x-1 shrink-0">
+                        {q.email && onSendEmailNotification && (
+                          <button
+                            type="button"
+                            id={`btn-pit-upcoming-email-${q.id}`}
+                            onClick={() => onSendEmailNotification('upcoming_call', q)}
+                            className="p-1.5 hover:bg-amber-500/15 text-amber-600 dark:text-amber-400 rounded-xl transition cursor-pointer"
+                            title={`Kirim Email Peringatan: Giliran Mau Dipanggil ke ${q.email}`}
+                          >
+                            <BellRing className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         <button
                           id={`btn-assign-pit-${q.id}`}
                           onClick={() => onUpdateStatus(q.id, 'washing', selectedPit?.id)}

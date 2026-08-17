@@ -161,8 +161,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 active={currentView === 'queues'}
                 onClick={() => handleNavClick('queues')}
                 collapsed={!isExpanded}
-                badge={waitingPaymentCount > 0 ? waitingPaymentCount : waitingCount}
-                badgeColor={waitingPaymentCount > 0 ? 'bg-orange-600 text-white' : 'bg-amber-500 text-slate-950 font-black'}
               />
               <SidebarItem
                 id="nav-pit"
@@ -233,8 +231,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 active={currentView === 'queues'}
                 onClick={() => handleNavClick('queues')}
                 collapsed={!isExpanded}
-                badge={waitingPaymentCount > 0 ? waitingPaymentCount : waitingCount}
-                badgeColor={waitingPaymentCount > 0 ? 'bg-orange-600 text-white' : 'bg-amber-500 text-slate-950 font-black'}
               />
               <SidebarItem
                 id="nav-dashboard"

@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
-import { PlusCircle, Sparkles, X, Clock, Bike, Car, Check } from 'lucide-react';
+import { PlusCircle, Sparkles, X, Clock, Bike, Car, Check, Mail } from 'lucide-react';
 import { ServiceItem, MotorType } from '../types.ts';
 
 interface CustomerRegisterViewProps {
   services: ServiceItem[];
-  onAddQueue: (data: { nama_pemohon: string; tipe_motor: MotorType; layanan_id: string }) => void;
+  onAddQueue: (data: {
+    nama_pemohon: string;
+    email?: string;
+    tipe_motor: MotorType;
+    layanan_id: string;
+  }) => void;
 }
 
 export const CustomerRegisterView: React.FC<CustomerRegisterViewProps> = ({
@@ -12,6 +17,7 @@ export const CustomerRegisterView: React.FC<CustomerRegisterViewProps> = ({
   onAddQueue
 }) => {
   const [namaPemohon, setNamaPemohon] = useState('');
+  const [email, setEmail] = useState('');
   const [tipeMotor, setTipeMotor] = useState<MotorType>('kecil');
   const [layananId, setLayananId] = useState(services[0]?.id || '');
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
@@ -37,11 +43,13 @@ export const CustomerRegisterView: React.FC<CustomerRegisterViewProps> = ({
 
     onAddQueue({
       nama_pemohon: namaPemohon.trim(),
+      email: email.trim() || undefined,
       tipe_motor: tipeMotor,
       layanan_id: layananId
     });
 
     setNamaPemohon('');
+    setEmail('');
   };
 
   return (
@@ -77,6 +85,30 @@ export const CustomerRegisterView: React.FC<CustomerRegisterViewProps> = ({
               onChange={(e) => setNamaPemohon(e.target.value)}
               className="w-full px-4 py-3.5 bg-slate-50 dark:bg-[#161A28] border border-slate-300 dark:border-[#23293D] rounded-2xl text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500 text-sm font-medium transition"
             />
+          </div>
+
+          {/* Input Email Pelanggan (Untuk Notifikasi Resend) */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-slate-800 dark:text-slate-200 font-bold flex items-center space-x-1.5">
+                <Mail className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>Email Notifikasi Antrean (Opsional)</span>
+              </label>
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full">
+                Kirim Tiket & Update
+              </span>
+            </div>
+            <input
+              id="input-customer-email"
+              type="email"
+              placeholder="contoh@gmail.com (untuk menerima status antrean via email)"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-50 dark:bg-[#161A28] border border-slate-300 dark:border-[#23293D] rounded-2xl text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500 text-xs font-medium transition"
+            />
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+              Notifikasi otomatis saat: Ambil Tiket &bull; Mau Dipanggil &bull; Sedang Dipanggil ke Pit &bull; Selesai Cuci & Pembayaran Lunas.
+            </p>
           </div>
 
           {/* Pilihan Tipe Kendaraan: Motor Kecil, Motor Besar, Mobil */}
@@ -213,14 +245,19 @@ export const CustomerRegisterView: React.FC<CustomerRegisterViewProps> = ({
             </div>
           </div>
 
-          <button
-            id="btn-submit-new-ticket"
-            type="submit"
-            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-2xl transition shadow-lg text-sm mt-4 flex items-center justify-center space-x-2 cursor-pointer"
-          >
-            <PlusCircle className="w-5 h-5 text-white" />
-            <span>Ambil Tiket Antrean Sekarang</span>
-          </button>
+          <div className="space-y-2 pt-2">
+            <button
+              id="btn-submit-new-ticket"
+              type="submit"
+              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-2xl transition shadow-lg text-sm flex items-center justify-center space-x-2 cursor-pointer"
+            >
+              <PlusCircle className="w-5 h-5 text-white" />
+              <span>Ambil Tiket Antrean Sekarang</span>
+            </button>
+            <p className="text-center text-[11px] text-slate-500 dark:text-slate-400">
+              Setelah mendaftar, Anda akan langsung diarahkan ke <strong>Layar Ruang Tunggu</strong> untuk memantau status panggilan antrean secara langsung.
+            </p>
+          </div>
         </form>
       </div>
 

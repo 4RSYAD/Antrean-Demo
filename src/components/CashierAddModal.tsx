@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PlusCircle, X, Bike, Car, Check } from 'lucide-react';
+import { PlusCircle, X, Bike, Car, Check, Mail } from 'lucide-react';
 import { ServiceItem, PitItem, MotorType } from '../types.ts';
 
 interface CashierAddModalProps {
@@ -9,6 +9,7 @@ interface CashierAddModalProps {
   pits: PitItem[];
   onAddQueue: (data: {
     nama_pemohon: string;
+    email?: string;
     tipe_motor: MotorType;
     layanan_id: string;
     pit_id?: string | null;
@@ -23,6 +24,7 @@ export const CashierAddModal: React.FC<CashierAddModalProps> = ({
   onAddQueue
 }) => {
   const [nama, setNama] = useState('');
+  const [email, setEmail] = useState('');
   const [tipeMotor, setTipeMotor] = useState<MotorType>('kecil');
   const [layananId, setLayananId] = useState(services[0]?.id || '');
   const [pitId, setPitId] = useState<string>('');
@@ -35,12 +37,14 @@ export const CashierAddModal: React.FC<CashierAddModalProps> = ({
 
     onAddQueue({
       nama_pemohon: nama.trim(),
+      email: email.trim() || undefined,
       tipe_motor: tipeMotor,
       layanan_id: layananId,
       pit_id: pitId || null
     });
 
     setNama('');
+    setEmail('');
     setTipeMotor('kecil');
     setPitId('');
     onClose();
@@ -85,6 +89,25 @@ export const CashierAddModal: React.FC<CashierAddModalProps> = ({
               value={nama}
               onChange={(e) => setNama(e.target.value)}
               className="w-full px-4 py-3 bg-slate-50 dark:bg-[#161A28] border border-slate-300 dark:border-[#23293D] rounded-2xl text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500 font-medium"
+            />
+          </div>
+
+          {/* Email Pelanggan (Notifikasi Resend) */}
+          <div>
+            <label className="block text-slate-800 dark:text-slate-200 mb-1 font-bold flex items-center justify-between">
+              <span className="flex items-center space-x-1">
+                <Mail className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>Email Pelanggan (Opsional)</span>
+              </span>
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-normal">Kirim Notifikasi Resend</span>
+            </label>
+            <input
+              id="input-cashier-customer-email"
+              type="email"
+              placeholder="contoh@gmail.com (tiket & notifikasi dipanggil)"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#161A28] border border-slate-300 dark:border-[#23293D] rounded-2xl text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500 font-medium text-xs"
             />
           </div>
 

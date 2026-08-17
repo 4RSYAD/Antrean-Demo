@@ -7,6 +7,8 @@ export interface QueueItem {
   id: string;
   nomor_antrian: string;
   nama_pemohon: string;
+  email?: string;
+  phone?: string;
   tipe_motor: VehicleType;
   layanan_id: string;
   total_biaya: number;
@@ -20,6 +22,8 @@ export interface QueueItem {
   is_paid: boolean;
   paid_at?: string;
   cashier_name?: string;
+  last_email_sent?: EmailNotificationType;
+  last_email_sent_at?: string;
 }
 
 export interface ServiceItem {
@@ -52,6 +56,26 @@ export interface StoreSettings {
   telepon: string;
   footer_struk: string;
   auto_voice: boolean;
+  // Resend Email notification settings
+  resend_api_key?: string;
+  resend_from_email?: string;
+  email_notifications_enabled?: boolean;
+}
+
+export type EmailNotificationType =
+  | 'ticket_created'    // 1. Berhasil ambil antrean
+  | 'upcoming_call'      // 2. Antrean mau dipanggil (peringatan persiapan)
+  | 'calling_pit'        // 3. Antrean sedang dipanggil masuk ke pit
+  | 'completed_paid';    // 4. Antrean selesai & sudah membayar
+
+export interface EmailNotificationPayload {
+  to: string;
+  type: EmailNotificationType;
+  queue: QueueItem;
+  service?: ServiceItem;
+  pit?: PitItem;
+  storeSettings?: StoreSettings;
+  customNotes?: string;
 }
 
 export type UserRole = 'admin' | 'pelanggan';

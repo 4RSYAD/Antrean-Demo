@@ -12,7 +12,13 @@ import {
   Phone,
   UserPlus,
   LogIn,
-  Info
+  Info,
+  Copy,
+  Check,
+  Radio,
+  Sparkles,
+  RefreshCw,
+  Code
 } from 'lucide-react';
 import { AuthUser, AppUser } from '../types.ts';
 import {
@@ -21,23 +27,30 @@ import {
   saveSupabaseCredentials,
   testSupabaseConnection,
   authenticateWithSupabaseUsers,
-  signUpWithSupabaseAuth
+  signUpWithSupabaseAuth,
+  seedInitialSupabaseData,
+  SUPABASE_SQL_SCHEMA
 } from '../utils/supabase.ts';
 
 interface LoginViewProps {
   onLoginSuccess: (user: AuthUser) => void;
-  onBackToCustomer: () => void;
+  onBackToCustomer?: () => void;
   isSupabaseConnected: boolean;
+  onSupabaseConnectedChange?: (connected: boolean) => void;
+  onReloadSupabaseData?: () => Promise<void>;
   onOpenSettings?: () => void;
   users: AppUser[];
   onRegisterUser: (newUser: AppUser) => void;
-  isDarkMode: boolean;
-  onToggleDarkMode: () => void;
+  isDarkMode?: boolean;
+  onToggleDarkMode?: () => void;
   onNavigateToTv?: () => void;
 }
 
 export const LoginView: React.FC<LoginViewProps> = ({
   onLoginSuccess,
+  isSupabaseConnected,
+  onSupabaseConnectedChange,
+  onReloadSupabaseData,
   users,
   onRegisterUser
 }) => {
@@ -62,18 +75,79 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
-  // Supabase Drawer
+  // Supabase Drawer & Config
   const [showDbConfig, setShowDbConfig] = useState(false);
   const [sbUrl, setSbUrl] = useState('');
   const [sbKey, setSbKey] = useState('');
   const [isSavingDb, setIsSavingDb] = useState(false);
+  const [isSeedingDb, setIsSeedingDb] = useState(false);
   const [dbStatusMsg, setDbStatusMsg] = useState('');
+  const [dbSuccess, setDbSuccess] = useState<boolean | null>(null);
+  const [copiedSchema, setCopiedSchema] = useState(false);
+  const [tableStatus, setTableStatus] = useState<{
+    queues: boolean;
+    services: boolean;
+    pits: boolean;
+    store_settings: boolean;
+    users: boolean;
+  } | null>(null);
 
   useEffect(() => {
     const creds = getSupabaseCredentials();
     setSbUrl(creds.url || '');
     setSbKey(creds.anonKey || '');
   }, []);
+
+  const handleCopySqlSchema = () => {
+    navigator.clipboard.writeText(SUPABASE_SQL_SCHEMA);
+    setCopiedSchema(true);
+    setTimeout(() => setCopiedSchema(false), 3000);
+  };
+
+  const handleTestAndSaveDbCreds = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setIsSavingDb(true);
+    setDbStatusMsg('');
+    setDbSuccess(null);
+
+    const cleanUrl = sbUrl.trim();
+    const cleanKey = sbKey.trim();
+
+    saveSupabaseCredentials({
+      url: cleanUrl,
+      anonKey: cleanKey
+    });
+
+    const res = await testSupabaseConnection();
+    setIsSavingDb(false);
+    setDbSuccess(res.success);
+    setDbStatusMsg(res.message);
+    setTableStatus(res.tables);
+
+    if (onSupabaseConnectedChange) {
+      onSupabaseConnectedChange(res.success);
+    }
+    if (res.success && onReloadSupabaseData) {
+      await onReloadSupabaseData();
+    }
+  };
+
+  const handleSeedDatabase = async () => {
+    setIsSeedingDb(true);
+    const res = await seedInitialSupabaseData();
+    setIsSeedingDb(false);
+    setDbStatusMsg(res.message);
+    setDbSuccess(res.success);
+
+    if (res.success) {
+      if (onReloadSupabaseData) {
+        await onReloadSupabaseData();
+      }
+      // Re-test table status
+      const testRes = await testSupabaseConnection();
+      setTableStatus(testRes.tables);
+    }
+  };
 
   // Step 1: Submit Register Form via Supabase Auth
   const handleInitiateRegister = async (e: React.FormEvent) => {
@@ -296,78 +370,85 @@ export const LoginView: React.FC<LoginViewProps> = ({
               <h2 className="text-2xl sm:text-3xl font-black tracking-tight mt-1.5 mb-3 text-white leading-tight">
                 {authMode === 'login'
                   ? 'Masuk ke Sistem Antrean'
-                  : authMode === 'confirm_email'
-                  ? 'Konfirmasi Email Supabase'
                   : 'Registrasi Akun Pengguna'}
               </h2>
               <p className="text-xs text-emerald-100 dark:text-slate-300 leading-relaxed mb-6">
                 {authMode === 'login'
-                  ? 'Gunakan akun yang telah didaftarkan dan dikonfirmasi untuk masuk ke sistem antrean cuci kendaraan.'
-                  : authMode === 'confirm_email'
-                  ? 'Buka email Anda dan klik tautan konfirmasi pendaftaran resmi dari Supabase untuk mengaktifkan akun.'
+                  ? 'Gunakan akun terdaftar Anda untuk masuk ke sistem manajemen antrean cuci kendaraan.'
                   : 'Pendaftaran akun baru otomatis terdaftar sebagai Pengguna. Peran staf (Kasir, Operator, Administrator) akan diberikan oleh Admin melalui Manajemen Pengguna.'}
               </p>
 
               <div className="space-y-3.5 pt-4 border-t border-white/10">
                 <div className="flex items-start space-x-3 text-xs text-emerald-50 dark:text-slate-300 font-medium">
                   <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0 mt-0.5" />
-                  <span>Verifikasi link email bawaan Supabase untuk keamanan & keaslian akun pengguna.</span>
+                  <span>Sistem Realtime: status antrean, pit cuci, dan pembayaran otomatis sinkron.</span>
                 </div>
                 <div className="flex items-start space-x-3 text-xs text-emerald-50 dark:text-slate-300 font-medium">
                   <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0 mt-0.5" />
-                  <span>Pemberian hak akses petugas (Kasir/Operator) dikelola langsung oleh Administrator.</span>
+                  <span>Dukungan database cloud Supabase untuk penyimpanan data permanen.</span>
                 </div>
                 <div className="flex items-start space-x-3 text-xs text-emerald-50 dark:text-slate-300 font-medium">
                   <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0 mt-0.5" />
-                  <span>Penyimpanan tersinkronisasi langsung dengan database Supabase Realtime.</span>
+                  <span>Pemberian hak akses petugas dikelola langsung oleh Administrator.</span>
                 </div>
               </div>
+            </div>
+
+            {/* Quick Supabase Toggle on Left Card */}
+            <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between text-xs">
+              <span className="text-emerald-100 text-[11px]">Database Cloud:</span>
+              <button
+                type="button"
+                onClick={() => setShowDbConfig(true)}
+                className="text-white underline font-bold hover:text-emerald-200 text-[11px] cursor-pointer flex items-center space-x-1"
+              >
+                <Database className="w-3.5 h-3.5 inline mr-1" />
+                <span>{isSupabaseConnected ? 'Kelola Supabase' : 'Hubungkan Supabase'}</span>
+              </button>
             </div>
           </div>
 
           {/* Right Side: Auth Card */}
           <div className="lg:col-span-7 bg-white dark:bg-[#0F121C] border border-slate-200 dark:border-[#23293D] p-6 sm:p-8 rounded-3xl shadow-sm space-y-6 flex flex-col justify-between">
             <div>
-              {/* Tab Selector (Hidden if confirming email) */}
-              {authMode !== 'confirm_email' && (
-                <div className="flex items-center p-1 bg-slate-100 dark:bg-[#161A28] rounded-2xl border border-slate-200 dark:border-[#23293D] mb-6">
-                  <button
-                    type="button"
-                    id="tab-login"
-                    onClick={() => {
-                      setAuthMode('login');
-                      setErrorMessage('');
-                      setSuccessMessage('');
-                    }}
-                    className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 cursor-pointer ${
-                      authMode === 'login'
-                        ? 'bg-white dark:bg-[#0F121C] text-slate-900 dark:text-white shadow-sm'
-                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    <LogIn className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    <span>Masuk (Login)</span>
-                  </button>
+              {/* Tab Selector */}
+              <div className="flex items-center p-1 bg-slate-100 dark:bg-[#161A28] rounded-2xl border border-slate-200 dark:border-[#23293D] mb-6">
+                <button
+                  type="button"
+                  id="tab-login"
+                  onClick={() => {
+                    setAuthMode('login');
+                    setErrorMessage('');
+                    setSuccessMessage('');
+                  }}
+                  className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 cursor-pointer ${
+                    authMode === 'login'
+                      ? 'bg-white dark:bg-[#0F121C] text-slate-900 dark:text-white shadow-sm'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <LogIn className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>Masuk (Login)</span>
+                </button>
 
-                  <button
-                    type="button"
-                    id="tab-register"
-                    onClick={() => {
-                      setAuthMode('register');
-                      setErrorMessage('');
-                      setSuccessMessage('');
-                    }}
-                    className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 cursor-pointer ${
-                      authMode === 'register'
-                        ? 'bg-white dark:bg-[#0F121C] text-slate-900 dark:text-white shadow-sm'
-                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    <UserPlus className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    <span>Daftar (Pengguna)</span>
-                  </button>
-                </div>
-              )}
+                <button
+                  type="button"
+                  id="tab-register"
+                  onClick={() => {
+                    setAuthMode('register');
+                    setErrorMessage('');
+                    setSuccessMessage('');
+                  }}
+                  className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 cursor-pointer ${
+                    authMode === 'register'
+                      ? 'bg-white dark:bg-[#0F121C] text-slate-900 dark:text-white shadow-sm'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <UserPlus className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>Daftar (Pengguna)</span>
+                </button>
+              </div>
 
               {/* Feedback Alerts */}
               {errorMessage && (
@@ -414,7 +495,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                         required
                         value={loginEmail}
                         onChange={(e) => setLoginEmail(e.target.value)}
-                        placeholder="pengguna@antrean.com"
+                        placeholder="admin@antrean.com / email terdaftar"
                         className="w-full bg-slate-50 dark:bg-[#161A28] border border-slate-200 dark:border-[#23293D] rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition"
                       />
                     </div>
@@ -457,14 +538,13 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 </form>
               )}
 
-              {/* MODE 2: REGISTER FORM (PENGGUNA ONLY - NO ROLE SELECTION) */}
+              {/* MODE 2: REGISTER FORM (PENGGUNA ONLY) */}
               {authMode === 'register' && (
                 <form onSubmit={handleInitiateRegister} className="space-y-3.5">
-                  {/* Role Notice Pill */}
                   <div className="p-3 bg-indigo-50/80 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/40 rounded-2xl flex items-start space-x-2.5 text-xs text-indigo-700 dark:text-indigo-300">
                     <Info className="w-4 h-4 shrink-0 mt-0.5 text-indigo-600 dark:text-indigo-400" />
                     <p className="leading-relaxed">
-                      Pendaftaran akun baru otomatis terdaftar sebagai <b>Pengguna</b>. Tautan konfirmasi email akan dikirimkan langsung oleh Supabase.
+                      Pendaftaran akun baru otomatis terdaftar sebagai <b>Pengguna</b>. Hak akses staf (Kasir/Operator) dapat diatur oleh Admin.
                     </p>
                   </div>
 
@@ -602,35 +682,35 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
         {/* Supabase Connection Setup Box (Collapsible) */}
         {showDbConfig && (
-          <div className="mt-6 bg-white dark:bg-[#0F121C] border border-slate-200 dark:border-[#23293D] rounded-3xl p-6 shadow-md">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 dark:border-[#1E2337]">
+          <div className="mt-6 bg-white dark:bg-[#0F121C] border border-slate-200 dark:border-[#23293D] rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-[#1E2337]">
               <div className="flex items-center space-x-3">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
                   <Database className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
-                    Pengaturan Koneksi Supabase
+                  <h4 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
+                    Konfigurasi Database Cloud Supabase
                   </h4>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Masukkan Project URL & Public Anon Key dari dashboard Supabase Anda
+                    Gunakan database Supabase PostgreSQL untuk sinkronisasi data antrean & autentikasi secara realtime
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowDbConfig(false)}
-                className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-bold cursor-pointer"
+                className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-[#161A28] text-xs text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-200 dark:hover:bg-[#1E2337] transition cursor-pointer"
               >
                 Tutup
               </button>
             </div>
 
-            <form onSubmit={handleSaveDbCreds} className="space-y-4">
+            <form onSubmit={handleTestAndSaveDbCreds} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Supabase Project URL
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Supabase Project URL <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -638,13 +718,14 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     placeholder="https://xyzproject.supabase.co"
                     value={sbUrl}
                     onChange={(e) => setSbUrl(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-[#161A28] border border-slate-200 dark:border-[#23293D] rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white font-mono focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-slate-50 dark:bg-[#161A28] border border-slate-200 dark:border-[#23293D] rounded-xl px-3 py-2.5 text-xs text-slate-900 dark:text-white font-mono focus:outline-none focus:border-emerald-500"
                   />
+                  <p className="text-[11px] text-slate-400 mt-1">Ditemukan di: Supabase Dashboard &rarr; Project Settings &rarr; API &rarr; Project URL</p>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Supabase Public Anon Key
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Supabase Public Anon Key <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="password"
@@ -652,25 +733,89 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                     value={sbKey}
                     onChange={(e) => setSbKey(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-[#161A28] border border-slate-200 dark:border-[#23293D] rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white font-mono focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-slate-50 dark:bg-[#161A28] border border-slate-200 dark:border-[#23293D] rounded-xl px-3 py-2.5 text-xs text-slate-900 dark:text-white font-mono focus:outline-none focus:border-emerald-500"
                   />
+                  <p className="text-[11px] text-slate-400 mt-1">Ditemukan di: Supabase Dashboard &rarr; Project Settings &rarr; API &rarr; Project API keys (anon public)</p>
                 </div>
               </div>
 
               {dbStatusMsg && (
-                <div className="p-3 bg-slate-100 dark:bg-[#161A28] rounded-xl text-xs text-slate-700 dark:text-slate-300">
-                  {dbStatusMsg}
+                <div
+                  className={`p-3.5 rounded-2xl text-xs flex items-start space-x-2.5 ${
+                    dbSuccess
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                      : 'bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+                  }`}
+                >
+                  {dbSuccess ? (
+                    <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
+                  )}
+                  <span className="font-medium">{dbStatusMsg}</span>
                 </div>
               )}
 
-              <div className="flex items-center justify-end space-x-2">
-                <button
-                  type="submit"
-                  disabled={isSavingDb}
-                  className="py-2 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition cursor-pointer"
-                >
-                  {isSavingDb ? 'Menguji Koneksi...' : 'Simpan & Uji Koneksi Database'}
-                </button>
+              {/* Table Health Diagnostic */}
+              {tableStatus && (
+                <div className="p-4 bg-slate-50 dark:bg-[#161A28] border border-slate-200 dark:border-[#23293D] rounded-2xl space-y-2">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                    Status Tabel Supabase:
+                  </span>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-[11px]">
+                    {Object.entries(tableStatus).map(([tbl, isOk]) => (
+                      <div
+                        key={tbl}
+                        className={`p-2 rounded-xl border flex items-center justify-between font-mono ${
+                          isOk
+                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400'
+                            : 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-400'
+                        }`}
+                      >
+                        <span className="font-bold">{tbl}</span>
+                        {isOk ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-rose-500" />}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={handleCopySqlSchema}
+                    className="py-2 px-3.5 bg-slate-100 hover:bg-slate-200 dark:bg-[#161A28] dark:hover:bg-[#1E2337] text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition flex items-center space-x-1.5 border border-slate-200 dark:border-[#23293D] cursor-pointer"
+                  >
+                    {copiedSchema ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedSchema ? 'SQL Schema Tersalin!' : 'Salin Skrip SQL Schema'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSeedDatabase}
+                    disabled={isSeedingDb || !isSupabaseConnected}
+                    className="py-2 px-3.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold text-xs rounded-xl transition flex items-center space-x-1.5 border border-indigo-200 dark:border-indigo-800/50 cursor-pointer disabled:opacity-50"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                    <span>{isSeedingDb ? 'Mengisi Data...' : 'Isi Data Awal (Seed)'}</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="submit"
+                    disabled={isSavingDb}
+                    className="py-2.5 px-5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl transition flex items-center space-x-2 shadow-md shadow-emerald-600/20 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSavingDb ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Database className="w-3.5 h-3.5" />
+                    )}
+                    <span>{isSavingDb ? 'Menguji Koneksi...' : 'Simpan & Uji Koneksi Database'}</span>
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -678,7 +823,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       </main>
 
       {/* Footer */}
-      <footer className="max-w-5xl w-full mx-auto text-center pt-6 text-[11px] text-slate-400 dark:text-slate-600">
+      <footer className="max-w-5xl w-full mx-auto text-center pt-4 text-[11px] text-slate-400 dark:text-slate-600">
         &copy; {new Date().getFullYear()} Sistem Manajemen Antrean Cuci Kendaraan. Seluruh hak cipta dilindungi.
       </footer>
     </div>

@@ -24,10 +24,18 @@ import {
   Play,
   Users,
   Download,
-  FileText
+  FileText,
+  Mail,
+  Send,
+  BellRing,
+  Info,
+  CheckSquare,
+  Globe
 } from 'lucide-react';
-import { StoreSettings, QueueItem, ServiceItem, PitItem, AppUser } from '../types.ts';
+import { StoreSettings, QueueItem, ServiceItem, PitItem, AppUser, EmailNotificationType } from '../types.ts';
 import { announceQueueVoice } from '../utils/audio.ts';
+import { triggerQueueEmail, sendEmailNotification, checkEmailStatus } from '../utils/resendClient.ts';
+import { generateEmailHtml, getEmailTypeLabel } from '../utils/emailTemplates.ts';
 import {
   getSupabaseCredentials,
   saveSupabaseCredentials,
@@ -77,8 +85,15 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   isSupabaseConnected,
   setIsSupabaseConnected
 }) => {
-  const [activeTab, setActiveTab] = useState<'store' | 'supabase'>('store');
+  const [activeTab, setActiveTab] = useState<'store' | 'email' | 'supabase'>('store');
   const [formData, setFormData] = useState<StoreSettings>({ ...settings });
+
+  // Email test & preview states
+  const [testEmailAddress, setTestEmailAddress] = useState('');
+  const [testEmailType, setTestEmailType] = useState<EmailNotificationType>('ticket_created');
+  const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
+  const [emailServerStatus, setEmailServerStatus] = useState<{ configured: boolean; fromEmail: string } | null>(null);
+  const [previewEmailType, setPreviewEmailType] = useState<EmailNotificationType>('ticket_created');
 
   // Supabase Form States
   const [sbUrl, setSbUrl] = useState('');
@@ -88,6 +103,7 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   const [isSeeding, setIsSeeding] = useState(false);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
+  const [copiedDnsKey, setCopiedDnsKey] = useState<string | null>(null);
   const [tableHealth, setTableHealth] = useState<{
     queues: boolean;
     services: boolean;
@@ -114,10 +130,22 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
         setIsSupabaseConnected(res.success);
       });
     }
+
+    // Check Resend Email Server Status
+    checkEmailStatus().then((status) => {
+      setEmailServerStatus(status);
+    });
   }, [setIsSupabaseConnected]);
 
   const handleChange = (field: keyof StoreSettings, val: any) => {
     setFormData((prev) => ({ ...prev, [field]: val }));
+  };
+
+  const handleCopyText = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedDnsKey(key);
+    setTimeout(() => setCopiedDnsKey(null), 2000);
+    showToast('Teks DNS berhasil disalin ke clipboard!', 'info');
   };
 
   const handleSaveStoreSettings = (e: React.FormEvent) => {
@@ -127,6 +155,76 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
       upsertSettingsToSupabase(formData);
     }
     showToast('Pengaturan toko & format struk berhasil disimpan!', 'success');
+  };
+
+  const handleSaveEmailSettings = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSettings(formData);
+    if (isSupabaseConnected) {
+      upsertSettingsToSupabase(formData);
+    }
+    showToast('Pengaturan Notifikasi Email Resend berhasil disimpan!', 'success');
+  };
+
+  const handleSendTestEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!testEmailAddress || !testEmailAddress.includes('@')) {
+      showToast('Masukkan alamat email tujuan pengujian yang valid.', 'warning');
+      return;
+    }
+
+    setIsSendingTestEmail(true);
+    // Create dummy sample queue item for testing
+    const sampleQueue: QueueItem = {
+      id: 'test-q-123',
+      nomor_antrian: 'A-012',
+      nama_pemohon: 'Budi Santoso',
+      email: testEmailAddress.trim(),
+      phone: '081234567890',
+      tipe_motor: 'mobil',
+      layanan_id: services[0]?.id || 's-1',
+      total_biaya: 45000,
+      status: testEmailType === 'completed_paid' ? 'done' : testEmailType === 'calling_pit' ? 'washing' : 'waiting',
+      pit_id: pits[0]?.id || null,
+      created_at: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+      is_paid: testEmailType === 'completed_paid',
+      paid_at: testEmailType === 'completed_paid' ? new Date().toLocaleTimeString('id-ID') : undefined,
+      cashier_name: 'Kasir Utama'
+    };
+
+    const sampleService = services[0] || {
+      id: 's-1',
+      nama_layanan: 'Cuci Salju Hidrolik + Wax',
+      deskripsi: 'Pencucian detail body & kolong mesin',
+      harga_kecil: 25000,
+      harga_besar: 35000,
+      harga_mobil: 45000,
+      durasi_menit: 25
+    };
+
+    const samplePit = pits[0] || {
+      id: 'p-1',
+      nama_pit: 'Pit Bay 1 (Hydraulic Lift)',
+      status: 'sibuk'
+    };
+
+    const res = await sendEmailNotification({
+      to: testEmailAddress.trim(),
+      type: testEmailType,
+      queue: sampleQueue,
+      service: sampleService,
+      pit: samplePit,
+      storeSettings: formData
+    });
+
+    setIsSendingTestEmail(false);
+    if (res.success) {
+      showToast(`Email ${getEmailTypeLabel(testEmailType)} berhasil terkirim ke ${testEmailAddress}!`, 'success');
+      // Refresh email server status
+      checkEmailStatus().then(setEmailServerStatus);
+    } else {
+      showToast(`Gagal mengirim email: ${res.message}`, 'error');
+    }
   };
 
   const handleTestSpeaker = () => {
@@ -333,7 +431,7 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex space-x-2 border-b border-slate-200 dark:border-[#23293D] pb-2">
+      <div className="flex flex-wrap gap-2 border-b border-slate-200 dark:border-[#23293D] pb-2">
         <button
           type="button"
           onClick={() => setActiveTab('store')}
@@ -345,6 +443,20 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
         >
           <Store className="w-4 h-4" />
           <span>Profil Toko & Struk Kasir</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('email')}
+          className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold transition flex items-center space-x-2 cursor-pointer ${
+            activeTab === 'email'
+              ? 'bg-emerald-600 text-white shadow-sm'
+              : 'bg-white dark:bg-[#0F121C] text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#161A28] border border-slate-200 dark:border-[#23293D]'
+          }`}
+        >
+          <Mail className="w-4 h-4" />
+          <span>Notifikasi Email Resend (4 Tahap)</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
         </button>
 
         <button
@@ -528,7 +640,582 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
         </form>
       )}
 
-      {/* Tab Content 2: Supabase Real-Time Integration */}
+      {/* Tab Content 2: Resend Email Integration (4 Stages) */}
+      {activeTab === 'email' && (
+        <div className="space-y-6">
+          {/* Email Server Status & Info Banner */}
+          <div className="bg-white dark:bg-[#0F121C] border border-slate-200 dark:border-[#23293D] p-5 sm:p-6 rounded-3xl space-y-4 shadow-sm">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-200 dark:border-[#23293D] pb-4">
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2 text-xs font-mono uppercase text-emerald-700 dark:text-emerald-400 font-bold">
+                  <Mail className="w-4 h-4" />
+                  <span>INTEGRASI NOTIFIKASI EMAIL RESEND</span>
+                </div>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                  Otomasi Notifikasi Email 4 Tahap Antrean
+                </h3>
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  Kirim email otomatis ke pelanggan saat berhasil ambil tiket, giliran mau dipanggil, sedang dipanggil ke pit, dan selesai cuci (lunas).
+                </p>
+              </div>
+
+              <div className="flex items-center space-x-2 shrink-0">
+                <div
+                  className={`px-3 py-1.5 rounded-2xl text-xs font-bold flex items-center space-x-2 ${
+                    emailServerStatus?.configured
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+                      : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
+                  }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      emailServerStatus?.configured ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+                    }`}
+                  ></span>
+                  <span>
+                    {emailServerStatus?.configured
+                      ? 'Resend API Aktif'
+                      : 'Server API Siap (Kredensial Default)'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* 4 Stages Breakdown Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+              {/* Stage 1 */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#161A28] border border-slate-200 dark:border-[#23293D] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold text-xs flex items-center justify-center font-mono">
+                    1
+                  </span>
+                  <span className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                    ticket_created
+                  </span>
+                </div>
+                <div className="font-extrabold text-xs text-slate-900 dark:text-white">
+                  Berhasil Ambil Antrean
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Dikirim saat pelanggan mendaftar di Kiosk atau Kasir dengan nomor tiket, estimasi, dan paket layanan.
+                </p>
+              </div>
+
+              {/* Stage 2 */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#161A28] border border-slate-200 dark:border-[#23293D] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-bold text-xs flex items-center justify-center font-mono">
+                    2
+                  </span>
+                  <span className="text-[10px] font-mono font-bold text-amber-700 dark:text-amber-400">
+                    upcoming_call
+                  </span>
+                </div>
+                <div className="font-extrabold text-xs text-slate-900 dark:text-white">
+                  Antrean Mau Dipanggil
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Peringatan agar pelanggan segera bersiap menuju area pencucian saat 1 antrean sebelum dipanggil.
+                </p>
+              </div>
+
+              {/* Stage 3 */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#161A28] border border-slate-200 dark:border-[#23293D] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 font-bold text-xs flex items-center justify-center font-mono">
+                    3
+                  </span>
+                  <span className="text-[10px] font-mono font-bold text-blue-700 dark:text-blue-400">
+                    calling_pit
+                  </span>
+                </div>
+                <div className="font-extrabold text-xs text-slate-900 dark:text-white">
+                  Sedang Dipanggil ke Pit
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Panggilan resmi memasukkan kendaraan ke Pit Bay pencucian tertentu untuk mulai proses cuci.
+                </p>
+              </div>
+
+              {/* Stage 4 */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#161A28] border border-slate-200 dark:border-[#23293D] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="w-6 h-6 rounded-full bg-teal-100 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 font-bold text-xs flex items-center justify-center font-mono">
+                    4
+                  </span>
+                  <span className="text-[10px] font-mono font-bold text-teal-700 dark:text-teal-400">
+                    completed_paid
+                  </span>
+                </div>
+                <div className="font-extrabold text-xs text-slate-900 dark:text-white">
+                  Selesai & Pembayaran Lunas
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Kwitansi digital resmi dikirim ke email setelah pelanggan menyelesaikan pembayaran di kasir.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left: Email Config & Live Tester */}
+            <div className="lg:col-span-6 space-y-6">
+              {/* Config Form */}
+              <form
+                onSubmit={handleSaveEmailSettings}
+                className="bg-white dark:bg-[#0F121C] border border-slate-200 dark:border-[#23293D] rounded-3xl p-6 space-y-5 shadow-sm"
+              >
+                <h3 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center space-x-2 border-b border-slate-200 dark:border-[#23293D] pb-3">
+                  <Settings className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>Pengaturan Pengiriman Email</span>
+                </h3>
+
+                <div className="space-y-4 text-xs">
+                  {/* Enable Switch */}
+                  <div className="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-[#161A28] rounded-2xl border border-slate-200 dark:border-[#23293D]">
+                    <div className="space-y-0.5">
+                      <div className="font-bold text-slate-900 dark:text-white">
+                        Aktifkan Otomasi Email
+                      </div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Kirim email secara otomatis pada 4 tahap antrean
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.email_notifications_enabled !== false}
+                        onChange={(e) => handleChange('email_notifications_enabled', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                    </label>
+                  </div>
+
+                  {/* Sender Email (From) */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-slate-800 dark:text-slate-200">
+                        Email Pengirim (Sender From):
+                      </label>
+                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-900/60 flex items-center space-x-1">
+                        <Globe className="w-3 h-3" />
+                        <span>antrean.online</span>
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      value={formData.resend_from_email || ''}
+                      onChange={(e) => handleChange('resend_from_email', e.target.value)}
+                      placeholder="notif@antrean.online"
+                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#161A28] border border-slate-300 dark:border-[#23293D] rounded-2xl text-slate-900 dark:text-white font-semibold font-mono focus:outline-none focus:border-emerald-500 text-xs"
+                    />
+                    {/* Quick domain presets */}
+                    <div className="space-y-1">
+                      <div className="text-[10px] text-slate-500 font-medium">Pilih preset alamat domain antrean.online:</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[
+                          'notif@antrean.online',
+                          'cs@antrean.online',
+                          'noreply@antrean.online',
+                          'info@antrean.online',
+                          'onboarding@resend.dev'
+                        ].map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => handleChange('resend_from_email', preset)}
+                            className={`px-2.5 py-1 rounded-xl text-[10px] font-mono font-bold transition cursor-pointer border ${
+                              formData.resend_from_email === preset
+                                ? 'bg-emerald-600 text-white border-emerald-600'
+                                : 'bg-slate-100 dark:bg-[#161A28] text-slate-700 dark:text-slate-300 border-slate-200 dark:border-[#23293D] hover:border-emerald-500'
+                            }`}
+                          >
+                            {preset}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Resend API Key (Optional Override) */}
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-800 dark:text-slate-200 flex items-center justify-between">
+                      <span>Resend API Key:</span>
+                      <span className="text-[10px] text-slate-400 font-normal">Opsional (bisa via .env)</span>
+                    </label>
+                    <input
+                      type="password"
+                      value={formData.resend_api_key || ''}
+                      onChange={(e) => handleChange('resend_api_key', e.target.value)}
+                      placeholder="re_xxxxxxxxxxxxxxxxxxxxxxxx"
+                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#161A28] border border-slate-300 dark:border-[#23293D] rounded-2xl text-slate-900 dark:text-white font-semibold font-mono focus:outline-none focus:border-emerald-500 text-xs"
+                    />
+                    <p className="text-[10px] text-slate-500">
+                      Dapatkan API key di <a href="https://resend.com/api-keys" target="_blank" rel="noreferrer" className="text-emerald-600 underline">resend.com/api-keys</a>.
+                    </p>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-3 px-4 rounded-2xl transition shadow-md flex items-center justify-center space-x-2 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4 text-white" />
+                    <span>Simpan Pengaturan Email</span>
+                  </button>
+                </div>
+              </form>
+
+              {/* Live Email Tester Form */}
+              <form
+                onSubmit={handleSendTestEmail}
+                className="bg-white dark:bg-[#0F121C] border border-slate-200 dark:border-[#23293D] rounded-3xl p-6 space-y-4 shadow-sm"
+              >
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-[#23293D] pb-3">
+                  <h3 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center space-x-2">
+                    <Send className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <span>Uji Coba Pengiriman Email Nyata</span>
+                  </h3>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold">
+                    Live Resend API
+                  </span>
+                </div>
+
+                <div className="space-y-3 text-xs">
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-800 dark:text-slate-200">
+                      Email Tujuan Uji Coba:
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={testEmailAddress}
+                      onChange={(e) => setTestEmailAddress(e.target.value)}
+                      placeholder="nama@emailanda.com"
+                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#161A28] border border-slate-300 dark:border-[#23293D] rounded-2xl text-slate-900 dark:text-white font-semibold focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-800 dark:text-slate-200">
+                      Pilih Tahap Notifikasi:
+                    </label>
+                    <select
+                      value={testEmailType}
+                      onChange={(e) => setTestEmailType(e.target.value as EmailNotificationType)}
+                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#161A28] border border-slate-300 dark:border-[#23293D] rounded-2xl text-slate-900 dark:text-white font-semibold focus:outline-none focus:border-emerald-500"
+                    >
+                      <option value="ticket_created">1. Berhasil Ambil Antrean (Tiket Baru)</option>
+                      <option value="upcoming_call">2. Antrean Mau Dipanggil (Peringatan)</option>
+                      <option value="calling_pit">3. Sedang Dipanggil Masuk Pit Bay</option>
+                      <option value="completed_paid">4. Antrean Selesai & Pembayaran Lunas (Kwitansi)</option>
+                    </select>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSendingTestEmail}
+                    className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 font-extrabold py-3 px-4 rounded-2xl transition shadow flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSendingTestEmail ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Mengirim via Resend...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4" />
+                        <span>Kirim Email Uji Coba Sekarang</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Right: Visual Template Previewer */}
+            <div className="lg:col-span-6 bg-white dark:bg-[#0F121C] border border-slate-200 dark:border-[#23293D] rounded-3xl p-6 space-y-4 shadow-sm flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 dark:border-[#23293D] pb-3">
+                  <h3 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center space-x-2">
+                    <Eye className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <span>Pratinjau Tampilan Template Email</span>
+                  </h3>
+
+                  <div className="flex space-x-1 overflow-x-auto pb-1 sm:pb-0">
+                    {(['ticket_created', 'upcoming_call', 'calling_pit', 'completed_paid'] as EmailNotificationType[]).map((t, idx) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setPreviewEmailType(t)}
+                        className={`px-2.5 py-1 rounded-xl text-[10px] font-bold transition cursor-pointer shrink-0 ${
+                          previewEmailType === t
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-slate-100 dark:bg-[#161A28] text-slate-600 dark:text-slate-400 hover:bg-slate-200'
+                        }`}
+                      >
+                        Tahap {idx + 1}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Email Preview Card */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 dark:bg-[#161A28] border border-slate-200 dark:border-[#23293D] space-y-4 max-h-[460px] overflow-y-auto">
+                  {/* Header preview */}
+                  <div className="text-center pb-3 border-b border-slate-200 dark:border-[#23293D] space-y-1">
+                    <div className="text-[10px] font-mono uppercase text-emerald-700 dark:text-emerald-400 font-bold">
+                      {formData.nama_usaha || 'SISTEM CUCI KENDARAAN'}
+                    </div>
+                    <div className="text-base font-black text-slate-900 dark:text-white">
+                      {previewEmailType === 'ticket_created' && 'Nomor Antrean Anda Berhasil Terdaftar!'}
+                      {previewEmailType === 'upcoming_call' && 'Peringatan: Antrean Anda Segera Dipanggil!'}
+                      {previewEmailType === 'calling_pit' && 'Nomor Antrean Anda Sedang Dipanggil!'}
+                      {previewEmailType === 'completed_paid' && 'Pencucian Selesai & Pembayaran Berhasil'}
+                    </div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                      Halo <b>Budi Santoso</b>, berikut adalah pembaruan status antrean cuci kendaraan Anda.
+                    </div>
+                  </div>
+
+                  {/* Big Number Pill */}
+                  <div className="p-4 rounded-2xl bg-white dark:bg-[#0F121C] border border-slate-200 dark:border-[#23293D] text-center space-y-1">
+                    <div className="text-[10px] uppercase font-bold text-slate-500">Nomor Antrean</div>
+                    <div className="text-3xl font-black font-mono text-emerald-600 dark:text-emerald-400">
+                      A-012
+                    </div>
+                    <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      Cuci Salju Hidrolik + Wax (Mobil)
+                    </div>
+                  </div>
+
+                  {/* Dynamic detail box */}
+                  <div className="space-y-2 text-xs">
+                    {previewEmailType === 'ticket_created' && (
+                      <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-300 space-y-1">
+                        <div className="font-bold">Estimasi Waktu Tunggu: ~15 - 20 Menit</div>
+                        <p className="text-[11px]">Silakan menikmati fasilitas ruang tunggu ber-AC kami yang nyaman.</p>
+                      </div>
+                    )}
+
+                    {previewEmailType === 'upcoming_call' && (
+                      <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 text-amber-900 dark:text-amber-300 space-y-1">
+                        <div className="font-bold">Sisa 1 Antrean Sebelum Giliran Anda!</div>
+                        <p className="text-[11px]">Harap bersiap-siap menuju kendaraan Anda untuk persiapan masuk ke Pit Bay pencucian.</p>
+                      </div>
+                    )}
+
+                    {previewEmailType === 'calling_pit' && (
+                      <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 text-blue-900 dark:text-blue-300 space-y-1">
+                        <div className="font-bold">Silakan Masuk ke: Pit Bay 1 (Hydraulic Lift)</div>
+                        <p className="text-[11px]">Petugas cuci kami siap melayani kendaraan Anda.</p>
+                      </div>
+                    )}
+
+                    {previewEmailType === 'completed_paid' && (
+                      <div className="p-3 rounded-xl bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-900/50 text-teal-900 dark:text-teal-300 space-y-1">
+                        <div className="font-bold">Status Pembayaran: LUNAS (Rp 45.000)</div>
+                        <p className="text-[11px]">Terima kasih telah mempercayakan kebersihan kendaraan Anda kepada kami!</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Footer note */}
+                  <div className="text-center text-[10px] text-slate-400 border-t border-slate-200 dark:border-[#23293D] pt-3">
+                    {formData.nama_usaha || 'Sistem Antrean Cuci'} &bull; {formData.alamat || 'Jl. Otomotif Raya No. 88'} &bull; Telp: {formData.telepon || '-'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-50 dark:bg-[#161A28] rounded-2xl border border-slate-200 dark:border-[#23293D] text-[11px] text-slate-600 dark:text-slate-400 font-medium">
+                ⚡ Template email didesain dengan format HTML responsif yang kompatibel di Gmail, Apple Mail, Outlook, dan aplikasi email seluler.
+              </div>
+            </div>
+          </div>
+
+          {/* Dedicated Custom Domain Guide for antrean.online */}
+          <div className="bg-white dark:bg-[#0F121C] border border-slate-200 dark:border-[#23293D] rounded-3xl p-6 space-y-5 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-[#23293D] pb-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-black">
+                  <Globe className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                      Panduan Konfigurasi Domain: <span className="text-emerald-600 dark:text-emerald-400">antrean.online</span>
+                    </h3>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300">
+                      Custom Domain
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Kirim email notifikasi profesional dari <code className="font-bold text-emerald-600">notif@antrean.online</code> langsung ke seluruh pelanggan tanpa batasan sandbox.
+                  </p>
+                </div>
+              </div>
+
+              <a
+                href="https://resend.com/domains"
+                target="_blank"
+                rel="noreferrer"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 self-start sm:self-auto cursor-pointer shadow-sm"
+              >
+                <span>Buka Resend Domains</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+
+            {/* 4-Step Checklist */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-[#161A28] border border-slate-200 dark:border-[#23293D] space-y-1">
+                <div className="font-extrabold text-slate-900 dark:text-white flex items-center space-x-1.5">
+                  <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] flex items-center justify-center font-mono">1</span>
+                  <span>Tambah Domain</span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Buka Resend Dashboard, klik <b>Add Domain</b>, dan ketik <code>antrean.online</code>.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-[#161A28] border border-slate-200 dark:border-[#23293D] space-y-1">
+                <div className="font-extrabold text-slate-900 dark:text-white flex items-center space-x-1.5">
+                  <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] flex items-center justify-center font-mono">2</span>
+                  <span>Buka DNS Manager</span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Buka Cloudflare, Niagahoster, Domainesia, atau provider tempat beli domain.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-[#161A28] border border-slate-200 dark:border-[#23293D] space-y-1">
+                <div className="font-extrabold text-slate-900 dark:text-white flex items-center space-x-1.5">
+                  <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] flex items-center justify-center font-mono">3</span>
+                  <span>Input Record DNS</span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Tambahkan DNS Record (DKIM, SPF, MX, DMARC) seperti pada tabel di bawah.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-[#161A28] border border-slate-200 dark:border-[#23293D] space-y-1">
+                <div className="font-extrabold text-slate-900 dark:text-white flex items-center space-x-1.5">
+                  <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] flex items-center justify-center font-mono">4</span>
+                  <span>Klik Verify</span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Klik <b>Verify Domain</b> di Resend. Status akan aktif (Verified) dalam beberapa menit.
+                </p>
+              </div>
+            </div>
+
+            {/* DNS Records Reference Table */}
+            <div className="space-y-2">
+              <div className="font-bold text-xs text-slate-800 dark:text-slate-200 flex items-center justify-between">
+                <span>Daftar DNS Records untuk domain antrean.online:</span>
+                <span className="text-[10px] text-slate-400 font-normal">Klik tombol salin untuk menyalin nilai host/value</span>
+              </div>
+
+              <div className="border border-slate-200 dark:border-[#23293D] rounded-2xl overflow-hidden text-xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-100 dark:bg-[#161A28] text-slate-600 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-[#23293D]">
+                      <tr>
+                        <th className="px-4 py-3">Tipe</th>
+                        <th className="px-4 py-3">Name / Host</th>
+                        <th className="px-4 py-3">Value / Target</th>
+                        <th className="px-4 py-3 text-right">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-[#23293D] text-slate-800 dark:text-slate-200 font-mono">
+                      {/* DKIM */}
+                      <tr className="hover:bg-slate-50 dark:hover:bg-[#161A28]/50">
+                        <td className="px-4 py-3 font-bold text-emerald-600 dark:text-emerald-400">TXT (DKIM)</td>
+                        <td className="px-4 py-3 text-[11px]">resend._domainkey</td>
+                        <td className="px-4 py-3 text-[11px] max-w-xs truncate text-slate-500">
+                          (Dapatkan kunci unik DKIM dari menu Domain di Resend Dashboard)
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText('resend._domainkey', 'host_dkim')}
+                            className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#23293D] hover:bg-emerald-600 hover:text-white transition cursor-pointer text-[10px] font-sans font-bold"
+                          >
+                            {copiedDnsKey === 'host_dkim' ? 'Tersalin ✓' : 'Salin Host'}
+                          </button>
+                        </td>
+                      </tr>
+
+                      {/* SPF */}
+                      <tr className="hover:bg-slate-50 dark:hover:bg-[#161A28]/50">
+                        <td className="px-4 py-3 font-bold text-emerald-600 dark:text-emerald-400">TXT (SPF)</td>
+                        <td className="px-4 py-3 text-[11px]">bounces</td>
+                        <td className="px-4 py-3 text-[11px] text-slate-700 dark:text-slate-300">
+                          v=spf1 include:amazonses.com ~all
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText('v=spf1 include:amazonses.com ~all', 'val_spf')}
+                            className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#23293D] hover:bg-emerald-600 hover:text-white transition cursor-pointer text-[10px] font-sans font-bold"
+                          >
+                            {copiedDnsKey === 'val_spf' ? 'Tersalin ✓' : 'Salin Value'}
+                          </button>
+                        </td>
+                      </tr>
+
+                      {/* MX */}
+                      <tr className="hover:bg-slate-50 dark:hover:bg-[#161A28]/50">
+                        <td className="px-4 py-3 font-bold text-emerald-600 dark:text-emerald-400">MX (Bounces)</td>
+                        <td className="px-4 py-3 text-[11px]">bounces (Priority 10)</td>
+                        <td className="px-4 py-3 text-[11px] text-slate-700 dark:text-slate-300">
+                          feedback-smtp.us-east-1.amazonses.com
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText('feedback-smtp.us-east-1.amazonses.com', 'val_mx')}
+                            className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#23293D] hover:bg-emerald-600 hover:text-white transition cursor-pointer text-[10px] font-sans font-bold"
+                          >
+                            {copiedDnsKey === 'val_mx' ? 'Tersalin ✓' : 'Salin Value'}
+                          </button>
+                        </td>
+                      </tr>
+
+                      {/* DMARC */}
+                      <tr className="hover:bg-slate-50 dark:hover:bg-[#161A28]/50">
+                        <td className="px-4 py-3 font-bold text-emerald-600 dark:text-emerald-400">TXT (DMARC)</td>
+                        <td className="px-4 py-3 text-[11px]">_dmarc</td>
+                        <td className="px-4 py-3 text-[11px] text-slate-700 dark:text-slate-300">
+                          v=DMARC1; p=none;
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText('v=DMARC1; p=none;', 'val_dmarc')}
+                            className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#23293D] hover:bg-emerald-600 hover:text-white transition cursor-pointer text-[10px] font-sans font-bold"
+                          >
+                            {copiedDnsKey === 'val_dmarc' ? 'Tersalin ✓' : 'Salin Value'}
+                          </button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 rounded-2xl flex items-center space-x-3 text-xs text-emerald-900 dark:text-emerald-300">
+              <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              <span>
+                Setelah diverifikasi di Resend, pengirim email Anda akan otomatis menggunakan <b>notif@antrean.online</b> dengan reputasi inbox 100% tinggi dan anti-spam.
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab Content 3: Supabase Real-Time Integration */}
       {activeTab === 'supabase' && (
         <div className="space-y-6">
           {/* Table Diagnostics Cards */}

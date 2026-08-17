@@ -32,7 +32,8 @@ import {
   ConfirmModalData,
   MotorType,
   QueueStatus,
-  AuthUser
+  AuthUser,
+  EmailNotificationType
 } from './types.ts';
 
 import {
@@ -47,6 +48,8 @@ import {
 } from './utils/storage.ts';
 
 import { announceQueueVoice, playAirportChime, setAudioMuted } from './utils/audio.ts';
+import { triggerQueueEmail } from './utils/resendClient.ts';
+import { getEmailTypeLabel } from './utils/emailTemplates.ts';
 import {
   getSupabaseClient,
   testSupabaseConnection,
@@ -83,13 +86,40 @@ export default function App() {
 
   // Authentication State
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
-    return loadStoredData<AuthUser | null>(STORAGE_KEYS.AUTH_USER, null);
+    const saved = loadStoredData<AuthUser | null>(STORAGE_KEYS.AUTH_USER, null);
+    return saved && saved.is_logged_in ? saved : null;
   });
 
   // Role and Navigation
-  // Explicit User Requirement: When web opens, always land on the LOGIN page first!
-  const [role, setRole] = useState<UserRole>('pelanggan');
-  const [currentView, setCurrentView] = useState<AdminView | CustomerView>('login');
+  // Automatically restore active role and view if user is already logged in
+  const [role, setRole] = useState<UserRole>(() => {
+    const savedUser = loadStoredData<AuthUser | null>(STORAGE_KEYS.AUTH_USER, null);
+    if (savedUser && savedUser.is_logged_in) {
+      const savedRole = loadStoredData<UserRole | null>(STORAGE_KEYS.ROLE, null);
+      if (savedRole) return savedRole;
+      return savedUser.role === 'pengguna' ? 'pelanggan' : 'admin';
+    }
+    return 'pelanggan';
+  });
+
+  const [currentView, setCurrentView] = useState<AdminView | CustomerView>(() => {
+    const savedUser = loadStoredData<AuthUser | null>(STORAGE_KEYS.AUTH_USER, null);
+    if (savedUser && savedUser.is_logged_in) {
+      const savedView = loadStoredData<AdminView | CustomerView | null>(
+        STORAGE_KEYS.CURRENT_VIEW,
+        null
+      );
+      if (savedView && savedView !== 'login') {
+        return savedView;
+      }
+      // Fallback default view based on user role
+      if (savedUser.role === 'pengguna') return 'check';
+      if (savedUser.role === 'operator') return 'pit';
+      if (savedUser.role === 'kasir') return 'queues';
+      return 'dashboard';
+    }
+    return 'login';
+  });
 
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -181,6 +211,14 @@ export default function App() {
   useEffect(() => {
     saveStoredData(STORAGE_KEYS.AUTH_USER, authUser);
   }, [authUser]);
+
+  useEffect(() => {
+    saveStoredData(STORAGE_KEYS.ROLE, role);
+  }, [role]);
+
+  useEffect(() => {
+    saveStoredData(STORAGE_KEYS.CURRENT_VIEW, currentView);
+  }, [currentView]);
 
   // Initial Supabase Load and Real-time Subscription Setup
   useEffect(() => {
@@ -334,29 +372,42 @@ export default function App() {
   // Handle Login & Logout
   const handleLoginSuccess = (user: AuthUser) => {
     setAuthUser(user);
+    saveStoredData(STORAGE_KEYS.AUTH_USER, user);
+
+    let nextRole: UserRole = 'admin';
+    let nextView: AdminView | CustomerView = 'dashboard';
+
     if (user.role === 'pengguna') {
-      setRole('pelanggan');
-      setCurrentView('check');
+      nextRole = 'pelanggan';
+      nextView = 'check';
       showToast(`Selamat datang ${user.name}! Akun Anda aktif sebagai Pengguna.`, 'info');
     } else if (user.role === 'operator') {
-      setRole('admin');
-      setCurrentView('pit');
+      nextRole = 'admin';
+      nextView = 'pit';
       showToast(`Selamat datang ${user.name}! Anda masuk sebagai Operator Pit Bay.`, 'success');
     } else if (user.role === 'kasir') {
-      setRole('admin');
-      setCurrentView('queues');
+      nextRole = 'admin';
+      nextView = 'queues';
       showToast(`Selamat datang ${user.name}! Anda masuk sebagai Petugas Kasir.`, 'success');
     } else {
-      setRole('admin');
-      setCurrentView('dashboard');
+      nextRole = 'admin';
+      nextView = 'dashboard';
       showToast(`Selamat datang kembali, ${user.name}! (Administrator)`, 'success');
     }
+
+    setRole(nextRole);
+    setCurrentView(nextView);
+    saveStoredData(STORAGE_KEYS.ROLE, nextRole);
+    saveStoredData(STORAGE_KEYS.CURRENT_VIEW, nextView);
   };
 
   const handleLogout = () => {
     setAuthUser(null);
     setRole('pelanggan');
     setCurrentView('login');
+    saveStoredData(STORAGE_KEYS.AUTH_USER, null);
+    saveStoredData(STORAGE_KEYS.ROLE, 'pelanggan');
+    saveStoredData(STORAGE_KEYS.CURRENT_VIEW, 'login');
     showToast('Anda telah berhasil keluar (Logout).', 'info');
   };
 
@@ -364,9 +415,48 @@ export default function App() {
     setCurrentView('login');
   };
 
+  // Send Email Notification Handler
+  const handleSendEmailNotification = async (
+    type: EmailNotificationType,
+    queue: QueueItem,
+    options?: { silent?: boolean }
+  ) => {
+    if (!queue.email || !queue.email.trim()) {
+      if (!options?.silent) {
+        showToast('Pelanggan ini tidak mencantumkan email.', 'warning');
+      }
+      return;
+    }
+
+    const res = await triggerQueueEmail(type, queue, services, pits, settings);
+    if (res.success) {
+      const nowIso = new Date().toISOString();
+      const updated: QueueItem = {
+        ...queue,
+        last_email_sent: type,
+        last_email_sent_at: nowIso
+      };
+      setQueues((prev) => prev.map((q) => (q.id === queue.id ? updated : q)));
+      upsertQueueToSupabase(updated);
+
+      if (!options?.silent) {
+        showToast(
+          `Email ${getEmailTypeLabel(type)} berhasil dikirim ke ${queue.email}!`,
+          'success'
+        );
+      }
+    } else {
+      if (!options?.silent && res.error !== 'DISABLED') {
+        showToast(`Gagal mengirim email: ${res.message}`, 'error');
+      }
+    }
+  };
+
   // Add Queue
   const handleAddQueue = (data: {
     nama_pemohon: string;
+    email?: string;
+    phone?: string;
     tipe_motor?: MotorType;
     layanan_id: string;
     pit_id?: string | null;
@@ -391,6 +481,8 @@ export default function App() {
       id: `q-${Date.now()}`,
       nomor_antrian,
       nama_pemohon: data.nama_pemohon,
+      email: data.email ? data.email.trim() : undefined,
+      phone: data.phone ? data.phone.trim() : undefined,
       tipe_motor: vehicleType,
       layanan_id: data.layanan_id,
       total_biaya,
@@ -403,6 +495,11 @@ export default function App() {
 
     setQueues((prev) => [newQueue, ...prev]);
     upsertQueueToSupabase(newQueue);
+
+    // Auto-send Email Stage 1: ticket_created
+    if (newQueue.email) {
+      handleSendEmailNotification('ticket_created', newQueue, { silent: true });
+    }
 
     if (settings.auto_voice && !isMuted) {
       playAirportChime();
@@ -441,6 +538,11 @@ export default function App() {
 
     setQueues((prev) => prev.map((q) => (q.id === queueId ? updatedQueue : q)));
     upsertQueueToSupabase(updatedQueue);
+
+    // Auto-send Email Stage 3: calling_pit
+    if (newStatus === 'washing' && updatedQueue.email) {
+      handleSendEmailNotification('calling_pit', updatedQueue, { silent: true });
+    }
 
     // Audio announcements
     if (settings.auto_voice && !isMuted) {
@@ -518,6 +620,11 @@ export default function App() {
 
     setQueues((prev) => prev.map((q) => (q.id === queueId ? updatedQueue : q)));
     upsertQueueToSupabase(updatedQueue);
+
+    // Auto-send Email Stage 4: completed_paid
+    if (updatedQueue.email) {
+      handleSendEmailNotification('completed_paid', updatedQueue, { silent: true });
+    }
 
     setPaymentQueueData(null);
     setReceiptData(updatedQueue);
@@ -722,6 +829,7 @@ export default function App() {
                 onOpenPaymentModal={(item) => setPaymentQueueData(item)}
                 onPrintReceipt={(item) => setReceiptData(item)}
                 onOpenQuickAddModal={() => setIsCashierAddOpen(true)}
+                onSendEmailNotification={handleSendEmailNotification}
                 searchQuery={searchQuery}
                 setSearchQuery={setSearchQuery}
               />
@@ -738,6 +846,7 @@ export default function App() {
                 onUpdateStatus={handleUpdateStatus}
                 onDeleteQueue={handleDeleteQueue}
                 onPrintReceipt={(item) => setReceiptData(item)}
+                onSendEmailNotification={handleSendEmailNotification}
               />
             )}
 
@@ -777,6 +886,7 @@ export default function App() {
               queues={queues}
               services={services}
               pits={pits}
+              storeSettings={settings}
             />
           )}
 
@@ -827,7 +937,11 @@ export default function App() {
           {(!authUser?.is_logged_in || authUser?.role === 'pengguna') && currentView === 'register' && (
             <CustomerRegisterView
               services={services}
-              onAddQueue={handleAddQueue}
+              onAddQueue={(data) => {
+                const created = handleAddQueue(data);
+                setCurrentView('tv');
+                return created;
+              }}
             />
           )}
 

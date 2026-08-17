@@ -128,7 +128,9 @@ export const INITIAL_SETTINGS: StoreSettings = {
   alamat: 'Jl. Otomotif Raya No. 88, Jakarta Selatan',
   telepon: '0812-3456-7890',
   footer_struk: 'Simpan struk ini untuk tanda bukti pengambilan kendaraan. Terima Kasih atas Kunjungan Anda!',
-  auto_voice: true
+  auto_voice: true,
+  resend_from_email: 'notif@antrean.online',
+  email_notifications_enabled: true
 };
 
 export const INITIAL_USERS: AppUser[] = [
@@ -173,6 +175,8 @@ const STORAGE_KEYS = {
   THEME: 'antrean_cuci_theme_v5',
   MUTED: 'antrean_cuci_muted_v5',
   AUTH_USER: 'antrean_cuci_auth_user_v5',
+  CURRENT_VIEW: 'antrean_cuci_current_view_v5',
+  ROLE: 'antrean_cuci_role_v5',
   SUPABASE_CONFIG: 'antrean_supabase_creds_v1'
 };
 
