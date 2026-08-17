@@ -377,34 +377,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   ? 'Gunakan akun terdaftar Anda untuk masuk ke sistem manajemen antrean cuci kendaraan.'
                   : 'Pendaftaran akun baru otomatis terdaftar sebagai Pengguna. Peran staf (Kasir, Operator, Administrator) akan diberikan oleh Admin melalui Manajemen Pengguna.'}
               </p>
-
-              <div className="space-y-3.5 pt-4 border-t border-white/10">
-                <div className="flex items-start space-x-3 text-xs text-emerald-50 dark:text-slate-300 font-medium">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0 mt-0.5" />
-                  <span>Sistem Realtime: status antrean, pit cuci, dan pembayaran otomatis sinkron.</span>
-                </div>
-                <div className="flex items-start space-x-3 text-xs text-emerald-50 dark:text-slate-300 font-medium">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0 mt-0.5" />
-                  <span>Dukungan database cloud Supabase untuk penyimpanan data permanen.</span>
-                </div>
-                <div className="flex items-start space-x-3 text-xs text-emerald-50 dark:text-slate-300 font-medium">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0 mt-0.5" />
-                  <span>Pemberian hak akses petugas dikelola langsung oleh Administrator.</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick Supabase Toggle on Left Card */}
-            <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between text-xs">
-              <span className="text-emerald-100 text-[11px]">Database Cloud:</span>
-              <button
-                type="button"
-                onClick={() => setShowDbConfig(true)}
-                className="text-white underline font-bold hover:text-emerald-200 text-[11px] cursor-pointer flex items-center space-x-1"
-              >
-                <Database className="w-3.5 h-3.5 inline mr-1" />
-                <span>{isSupabaseConnected ? 'Kelola Supabase' : 'Hubungkan Supabase'}</span>
-              </button>
             </div>
           </div>
 
@@ -495,7 +467,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                         required
                         value={loginEmail}
                         onChange={(e) => setLoginEmail(e.target.value)}
-                        placeholder="admin@antrean.com / email terdaftar"
+                        placeholder="email@gmail.com"
                         className="w-full bg-slate-50 dark:bg-[#161A28] border border-slate-200 dark:border-[#23293D] rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition"
                       />
                     </div>
