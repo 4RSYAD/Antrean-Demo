@@ -110,19 +110,46 @@ export function generateEmailHtml(payload: EmailNotificationPayload): {
       break;
 
     case 'completed_paid':
-      subject = `[${storeName}] Struk & Cuci Selesai - Antrean #${queueNo} (LUNAS)`;
-      headline = 'Cuci Kendaraan Selesai & Pembayaran Lunas';
+      subject = `[${storeName}] Kwitansi Lunas & Cuci Selesai - Antrean #${queueNo}`;
+      headline = 'Pencucian Selesai & Pembayaran LUNAS';
       badgeText = `LUNAS & SELESAI: ${queueNo}`;
       badgeBg = '#059669';
-      mainMessage = `Halo <strong>${customerName}</strong>, terima kasih telah mempercayakan kendaraan Anda kepada kami! Proses pencucian telah selesai dan pembayaran Anda telah berhasil diverifikasi oleh kasir.`;
+      mainMessage = `Halo <strong>${customerName}</strong>, terima kasih telah mempercayakan kendaraan Anda kepada kami! Proses pencucian telah <strong>SELESAI</strong> dan pembayaran Anda sebesar <strong>${costStr}</strong> telah <strong>LUNAS</strong> diverifikasi oleh kasir.`;
       alertBox = `
         <div style="background-color: #ECFDF5; border-left: 4px solid #10B981; padding: 14px 16px; border-radius: 8px; margin: 20px 0; color: #065F46;">
-          <p style="margin: 0; font-size: 14px; font-weight: 700; color: #047857;">Pembayaran LUNAS (${costStr})</p>
-          <p style="margin: 4px 0 0 0; font-size: 13px; color: #065F46;">Kendaraan Anda sudah bersih, wangi, dan siap digunakan kembali.</p>
+          <p style="margin: 0; font-size: 14px; font-weight: 800; color: #047857;">✓ STATUS PEMBAYARAN: LUNAS (${costStr})</p>
+          <p style="margin: 4px 0 0 0; font-size: 13px; color: #065F46;">Kendaraan Anda sudah bersih, kinclong, dan siap untuk diambil di area penyerahan kendaraan. Selamat jalan!</p>
         </div>
       `;
       break;
   }
+
+  // Determine accurate payment status text and color based on notification type & queue state
+  const isPaidVerified = type === 'completed_paid' || queue.is_paid;
+  const paymentStatusText = isPaidVerified
+    ? '✓ LUNAS (Sudah Dibayar)'
+    : type === 'ticket_created'
+    ? 'Belum Bayar (Bayar di kasir setelah selesai cuci)'
+    : type === 'calling_pit'
+    ? 'Belum Bayar (Menunggu proses cuci selesai)'
+    : 'Belum Bayar (Silakan menuju kasir)';
+  const paymentStatusColor = isPaidVerified ? '#059669' : '#D97706';
+
+  const queueStatusLabel =
+    type === 'ticket_created'
+      ? 'Menunggu Giliran (Dalam Antrean)'
+      : type === 'upcoming_call'
+      ? 'Persiapan (Sisa 1 Antrean Sebelum Giliran Anda)'
+      : type === 'calling_pit'
+      ? `Sedang Dipanggil ke ${pitName}`
+      : 'Selesai Cuci & Kendaraan Siap Diambil';
+
+  const paymentTimeStr = isPaidVerified
+    ? formatDateTimeIndo(queue.paid_at || new Date().toISOString())
+    : null;
+  const cashierDisplay = isPaidVerified
+    ? queue.cashier_name || 'Petugas Kasir'
+    : null;
 
   const html = `
 <!DOCTYPE html>
@@ -177,6 +204,10 @@ export function generateEmailHtml(payload: EmailNotificationPayload): {
                   <td style="padding: 12px 16px; font-size: 15px; color: #0F172A; font-weight: 800; border-bottom: 1px solid #E2E8F0; font-family: monospace;">${queueNo}</td>
                 </tr>
                 <tr>
+                  <td style="padding: 12px 16px; font-size: 13px; color: #64748B; font-weight: 600; border-bottom: 1px solid #E2E8F0;">Status Antrean</td>
+                  <td style="padding: 12px 16px; font-size: 13px; color: #0F172A; font-weight: 700; border-bottom: 1px solid #E2E8F0;">${queueStatusLabel}</td>
+                </tr>
+                <tr>
                   <td style="padding: 12px 16px; font-size: 13px; color: #64748B; font-weight: 600; border-bottom: 1px solid #E2E8F0;">Nama Pelanggan</td>
                   <td style="padding: 12px 16px; font-size: 13px; color: #0F172A; font-weight: 700; border-bottom: 1px solid #E2E8F0;">${customerName}</td>
                 </tr>
@@ -186,7 +217,7 @@ export function generateEmailHtml(payload: EmailNotificationPayload): {
                 </tr>
                 <tr>
                   <td style="padding: 12px 16px; font-size: 13px; color: #64748B; font-weight: 600; border-bottom: 1px solid #E2E8F0;">Paket Layanan</td>
-                  <td style="padding: 12px 16px; font-size: 13px; color: #0F172A; font-weight: 600; border-bottom: 1px solid #E2E8F0;">${serviceName}</td>
+                  <td style="padding: 12px 16px; font-size: 13px; color: #0F172A; font-weight: 600; border-bottom: 1px solid #E2E8F0;">${serviceName} ${service?.durasi_menit ? `(~${service.durasi_menit} mnt)` : ''}</td>
                 </tr>
                 ${
                   pit?.nama_pit
@@ -197,28 +228,28 @@ export function generateEmailHtml(payload: EmailNotificationPayload): {
                     : ''
                 }
                 <tr>
-                  <td style="padding: 12px 16px; font-size: 13px; color: #64748B; font-weight: 600; border-bottom: 1px solid #E2E8F0;">Biaya Layanan</td>
+                  <td style="padding: 12px 16px; font-size: 13px; color: #64748B; font-weight: 600; border-bottom: 1px solid #E2E8F0;">Total Biaya</td>
                   <td style="padding: 12px 16px; font-size: 15px; color: #059669; font-weight: 800; border-bottom: 1px solid #E2E8F0; font-family: monospace;">${costStr}</td>
                 </tr>
                 <tr>
                   <td style="padding: 12px 16px; font-size: 13px; color: #64748B; font-weight: 600; border-bottom: 1px solid #E2E8F0;">Status Pembayaran</td>
-                  <td style="padding: 12px 16px; font-size: 13px; color: ${queue.is_paid ? '#059669' : '#D97706'}; font-weight: 700; border-bottom: 1px solid #E2E8F0;">
-                    ${queue.is_paid ? '✓ LUNAS' : 'Belum Bayar (Bayar di Kasir)'}
+                  <td style="padding: 12px 16px; font-size: 13px; color: ${paymentStatusColor}; font-weight: 800; border-bottom: 1px solid #E2E8F0;">
+                    ${paymentStatusText}
                   </td>
                 </tr>
                 ${
-                  queue.paid_at
+                  paymentTimeStr
                     ? `<tr>
                         <td style="padding: 12px 16px; font-size: 13px; color: #64748B; font-weight: 600; border-bottom: 1px solid #E2E8F0;">Waktu Pembayaran</td>
-                        <td style="padding: 12px 16px; font-size: 13px; color: #0F172A; font-weight: 600; border-bottom: 1px solid #E2E8F0;">${formatDateTimeIndo(queue.paid_at)}</td>
+                        <td style="padding: 12px 16px; font-size: 13px; color: #0F172A; font-weight: 600; border-bottom: 1px solid #E2E8F0;">${paymentTimeStr}</td>
                       </tr>`
                     : ''
                 }
                 ${
-                  queue.cashier_name
+                  cashierDisplay
                     ? `<tr>
                         <td style="padding: 12px 16px; font-size: 13px; color: #64748B; font-weight: 600;">Petugas Kasir</td>
-                        <td style="padding: 12px 16px; font-size: 13px; color: #0F172A; font-weight: 600;">${queue.cashier_name}</td>
+                        <td style="padding: 12px 16px; font-size: 13px; color: #0F172A; font-weight: 600;">${cashierDisplay}</td>
                       </tr>`
                     : ''
                 }
@@ -261,12 +292,13 @@ export function generateEmailHtml(payload: EmailNotificationPayload): {
 ${storeName} - ${headline}
 =======================================
 NOMOR ANTREAN: ${queueNo}
+Status Antrean: ${queueStatusLabel}
 Nama: ${customerName}
 Kendaraan: ${vehicleLabel}
-Paket: ${serviceName}
+Paket Layanan: ${serviceName}
 Total Biaya: ${costStr}
-Status: ${queue.is_paid ? 'Lunas' : 'Menunggu / Belum Bayar'}
-${pit?.nama_pit ? `Pit: ${pitName}\n` : ''}
+Status Pembayaran: ${paymentStatusText}
+${paymentTimeStr ? `Waktu Pembayaran: ${paymentTimeStr}\n` : ''}${cashierDisplay ? `Petugas Kasir: ${cashierDisplay}\n` : ''}${pit?.nama_pit ? `Pit: ${pitName}\n` : ''}
 ${mainMessage.replace(/<[^>]*>?/gm, '')}
 =======================================
 ${storeName} ${storeAddress ? `| ${storeAddress}` : ''} ${storePhone ? `| ${storePhone}` : ''}

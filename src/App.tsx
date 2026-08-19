@@ -277,12 +277,33 @@ export default function App() {
             (payload) => {
               if (payload.eventType === 'INSERT') {
                 setQueues((prev) => {
-                  if (prev.some((q) => q.id === payload.new.id)) return prev;
+                  const existing = prev.find((q) => q.id === payload.new.id);
+                  if (existing) {
+                    return prev.map((q) =>
+                      q.id === payload.new.id
+                        ? {
+                            ...q,
+                            ...payload.new,
+                            email: payload.new.email || q.email,
+                            phone: payload.new.phone || q.phone
+                          }
+                        : q
+                    );
+                  }
                   return [payload.new as QueueItem, ...prev];
                 });
               } else if (payload.eventType === 'UPDATE') {
                 setQueues((prev) =>
-                  prev.map((q) => (q.id === payload.new.id ? (payload.new as QueueItem) : q))
+                  prev.map((q) =>
+                    q.id === payload.new.id
+                      ? {
+                          ...q,
+                          ...payload.new,
+                          email: payload.new.email || q.email,
+                          phone: payload.new.phone || q.phone
+                        }
+                      : q
+                  )
                 );
               } else if (payload.eventType === 'DELETE') {
                 setQueues((prev) => prev.filter((q) => q.id !== payload.old.id));
@@ -531,12 +552,10 @@ export default function App() {
     }
 
     if (settings.auto_voice && !isMuted) {
-      playAirportChime();
-      setTimeout(() => {
-        announceQueueVoice(
-          `Nomor antrean baru ${nomor_antrian} atas nama ${data.nama_pemohon} telah didaftarkan.`
-        );
-      }, 700);
+      announceQueueVoice(
+        `Nomor antrean baru ${nomor_antrian} atas nama ${data.nama_pemohon} telah didaftarkan.`,
+        'new_ticket'
+      );
     }
 
     showToast(
@@ -600,23 +619,33 @@ export default function App() {
       if (newStatus === 'washing') {
         const pit = pits.find((p) => p.id === (targetPitId || queue.pit_id));
         const pitName = pit ? pit.nama_pit : 'area pencucian';
-        playAirportChime();
-        setTimeout(() => {
-          announceQueueVoice(
-            `Panggilan nomor antrean ${queue.nomor_antrian}, atas nama ${queue.nama_pemohon}, silakan menuju ${pitName}.`
-          );
-        }, 700);
+        announceQueueVoice(
+          `Panggilan nomor antrean ${queue.nomor_antrian}, atas nama ${queue.nama_pemohon}, silakan menuju ${pitName}.`,
+          'call_pit'
+        );
       } else if (newStatus === 'done' || newStatus === 'waiting_payment') {
-        playAirportChime();
-        setTimeout(() => {
-          announceQueueVoice(
-            `Nomor antrean ${queue.nomor_antrian}, atas nama ${queue.nama_pemohon}, proses pencucian telah selesai. Silakan menuju kasir.`
-          );
-        }, 700);
+        announceQueueVoice(
+          `Nomor antrean ${queue.nomor_antrian}, atas nama ${queue.nama_pemohon}, proses pencucian telah selesai. Silakan menuju kasir.`,
+          'wash_done'
+        );
       }
     }
 
     showToast(`Status antrean ${queue.nomor_antrian} diperbarui.`, 'info');
+  };
+
+  // Update Queue Contact (Email / Phone)
+  const handleUpdateQueueContact = (id: string, email: string, phone?: string) => {
+    const queue = queues.find((q) => q.id === id);
+    if (!queue) return;
+    const updated: QueueItem = {
+      ...queue,
+      email: email.trim() || undefined,
+      phone: phone !== undefined ? phone.trim() || undefined : queue.phone
+    };
+    setQueues((prev) => prev.map((q) => (q.id === id ? updated : q)));
+    upsertQueueToSupabase(updated);
+    showToast(`Kontak email antrean ${queue.nomor_antrian} berhasil diperbarui.`, 'success');
   };
 
   // Call Next in Pit
@@ -911,6 +940,7 @@ export default function App() {
                 onPrintReceipt={(item) => setReceiptData(item)}
                 onOpenQuickAddModal={() => setIsCashierAddOpen(true)}
                 onSendEmailNotification={handleSendEmailNotification}
+                onUpdateQueueContact={handleUpdateQueueContact}
                 searchQuery={searchQuery}
                 setSearchQuery={setSearchQuery}
               />

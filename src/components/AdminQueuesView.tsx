@@ -32,6 +32,7 @@ interface AdminQueuesViewProps {
   onUpdateStatus: (id: string, newStatus: QueueStatus, pitId?: string | null) => void;
   onDeleteQueue: (id: string) => void;
   onSendEmailNotification?: (type: EmailNotificationType, queue: QueueItem) => void;
+  onUpdateQueueContact?: (id: string, email: string, phone?: string) => void;
   searchQuery: string;
   setSearchQuery: (val: string) => void;
 }
@@ -46,11 +47,14 @@ export const AdminQueuesView: React.FC<AdminQueuesViewProps> = ({
   onUpdateStatus,
   onDeleteQueue,
   onSendEmailNotification,
+  onUpdateQueueContact,
   searchQuery,
   setSearchQuery
 }) => {
   const [selectedStatusTab, setSelectedStatusTab] = useState<string>('all');
   const [activeEmailMenuId, setActiveEmailMenuId] = useState<string | null>(null);
+  const [editingEmailQueueId, setEditingEmailQueueId] = useState<string | null>(null);
+  const [tempEmailValue, setTempEmailValue] = useState<string>('');
 
   const filteredQueues = queues.filter((q) => {
     const qName = q.nama_pemohon.toLowerCase();
@@ -90,7 +94,7 @@ export const AdminQueuesView: React.FC<AdminQueuesViewProps> = ({
         `Pengumuman selesai cuci: Nomor antrean ${item.nomor_antrian}, atas nama ${item.nama_pemohon}, ${vehicleLabel} Anda telah selesai dicuci. Silakan menuju kasir untuk proses pembayaran.`,
         'wash_done'
       );
-      if (item.email && onSendEmailNotification) {
+      if (item.email && onSendEmailNotification && item.is_paid) {
         onSendEmailNotification('completed_paid', item);
       }
     } else {
@@ -99,7 +103,7 @@ export const AdminQueuesView: React.FC<AdminQueuesViewProps> = ({
         'paid_pickup'
       );
       if (item.email && onSendEmailNotification) {
-        onSendEmailNotification('completed_paid', item);
+        onSendEmailNotification('completed_paid', { ...item, is_paid: true });
       }
     }
   };
@@ -326,18 +330,78 @@ export const AdminQueuesView: React.FC<AdminQueuesViewProps> = ({
                           <span className="font-extrabold text-slate-900 dark:text-white text-xs">
                             {item.nama_pemohon}
                           </span>
-                          {item.email ? (
-                            <div className="flex items-center space-x-1 mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">
+                          
+                          {editingEmailQueueId === item.id ? (
+                            <div className="flex items-center space-x-1 mt-1 z-20">
+                              <input
+                                type="email"
+                                value={tempEmailValue}
+                                onChange={(e) => setTempEmailValue(e.target.value)}
+                                placeholder="email@gmail.com"
+                                className="px-2 py-0.5 text-[11px] font-mono border border-emerald-500 rounded bg-white dark:bg-[#161A28] text-slate-900 dark:text-white focus:outline-none w-36"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    if (onUpdateQueueContact) {
+                                      onUpdateQueueContact(item.id, tempEmailValue);
+                                    }
+                                    setEditingEmailQueueId(null);
+                                  } else if (e.key === 'Escape') {
+                                    setEditingEmailQueueId(null);
+                                  }
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (onUpdateQueueContact) {
+                                    onUpdateQueueContact(item.id, tempEmailValue);
+                                  }
+                                  setEditingEmailQueueId(null);
+                                }}
+                                className="px-1.5 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold"
+                                title="Simpan Email"
+                              >
+                                ✓
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingEmailQueueId(null)}
+                                className="px-1.5 py-0.5 bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded text-[10px]"
+                                title="Batal"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ) : item.email ? (
+                            <div
+                              onClick={() => {
+                                setEditingEmailQueueId(item.id);
+                                setTempEmailValue(item.email || '');
+                              }}
+                              className="flex items-center space-x-1 mt-0.5 text-[10px] text-slate-600 dark:text-slate-400 hover:text-emerald-700 dark:hover:text-emerald-400 cursor-pointer group"
+                              title="Klik untuk ubah email pelanggan"
+                            >
                               <Mail className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                              <span className="truncate max-w-[130px] font-mono" title={item.email}>
+                              <span className="truncate max-w-[130px] font-mono group-hover:underline">
                                 {item.email}
                               </span>
                             </div>
                           ) : (
-                            <span className="text-[9px] text-slate-400 dark:text-slate-500 italic">
-                              Tanpa Email
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingEmailQueueId(item.id);
+                                setTempEmailValue('');
+                              }}
+                              className="text-left text-[9px] text-emerald-800 dark:text-emerald-400 hover:underline flex items-center space-x-1 mt-0.5 cursor-pointer"
+                              title="Klik untuk masukkan email pelanggan agar dapat notifikasi otomatis"
+                            >
+                              <span className="text-slate-400 dark:text-slate-500 italic">Tanpa Email</span>
+                              <span className="font-bold text-[8px] bg-emerald-100 dark:bg-emerald-950/60 px-1 py-0.2 rounded text-emerald-800 dark:text-emerald-400">+ Isi Email</span>
+                            </button>
                           )}
+
                           {item.last_email_sent && (
                             <span
                               className="mt-0.5 inline-block text-[9px] font-mono text-emerald-700 dark:text-emerald-400 font-semibold truncate max-w-[140px]"

@@ -30,7 +30,8 @@ import {
   BellRing,
   Info,
   CheckSquare,
-  Globe
+  Globe,
+  AlertCircle
 } from 'lucide-react';
 import { StoreSettings, QueueItem, ServiceItem, PitItem, AppUser, EmailNotificationType } from '../types.ts';
 import { announceQueueVoice } from '../utils/audio.ts';
@@ -103,7 +104,21 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   const [isSeeding, setIsSeeding] = useState(false);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
+  const [copiedMigrationSql, setCopiedMigrationSql] = useState(false);
   const [copiedDnsKey, setCopiedDnsKey] = useState<string | null>(null);
+
+  const handleCopyMigrationSql = () => {
+    const migrationSql = `-- Tambahkan kolom email & phone ke tabel queues agar notifikasi email berjalan sempurna
+ALTER TABLE queues ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE queues ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS resend_api_key TEXT;
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS resend_from_email TEXT DEFAULT 'notif@antrean.online';
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS email_notifications_enabled BOOLEAN DEFAULT TRUE;`;
+    navigator.clipboard.writeText(migrationSql);
+    setCopiedMigrationSql(true);
+    showToast('Skrip SQL Tambah Kolom Email berhasil disalin!', 'success');
+    setTimeout(() => setCopiedMigrationSql(false), 3000);
+  };
   const [tableHealth, setTableHealth] = useState<{
     queues: boolean;
     services: boolean;
@@ -1031,6 +1046,27 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                 ⚡ Template email didesain dengan format HTML responsif yang kompatibel di Gmail, Apple Mail, Outlook, dan aplikasi email seluler.
               </div>
             </div>
+          </div>
+
+          {/* Supabase Column Migration Banner */}
+          <div className="p-4 sm:p-5 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center space-x-2 text-amber-900 dark:text-amber-300 font-extrabold text-sm">
+                <AlertCircle className="w-5 h-5 text-amber-700 dark:text-amber-400 shrink-0" />
+                <span>Penting: Pastikan Kolom Email Tersedia di Database Supabase</span>
+              </div>
+              <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed max-w-2xl">
+                Jika database Supabase Anda dibuat dari versi sebelumnya dan antrean berstatus <i>"Tanpa Email"</i>, jalankan 1 baris perintah SQL ini di <b>SQL Editor Supabase</b> agar kolom email & phone tersimpan permanen di cloud.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleCopyMigrationSql}
+              className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs flex items-center space-x-2 shrink-0 shadow-sm cursor-pointer transition"
+            >
+              {copiedMigrationSql ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              <span>{copiedMigrationSql ? 'SQL Tersalin!' : 'Salin SQL Tambah Kolom Email'}</span>
+            </button>
           </div>
 
           {/* Dedicated Custom Domain Guide for antrean.online */}

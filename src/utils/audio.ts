@@ -1,13 +1,49 @@
 /**
  * Audio Chime and Voice Announcement Utility for Queue Calls
+ * Bulletproof Indonesian Text-To-Speech (TTS) & Web Audio Chimes
  */
 
 let isAudioMuted = false;
+
+// Maintain active utterances in global memory to prevent Chrome garbage collection cutoffs
+const activeUtterances: SpeechSynthesisUtterance[] = [];
+
+// Pre-cached Indonesian voice
+let cachedIndoVoice: SpeechSynthesisVoice | null = null;
+
+function loadVoices(): void {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices || voices.length === 0) return;
+
+  // Search for Indonesian voices with priority
+  const indo =
+    voices.find(
+      (v) =>
+        (v.lang === 'id-ID' || v.lang === 'id_ID' || v.lang.startsWith('id')) &&
+        (v.name.toLowerCase().includes('indonesia') || v.name.toLowerCase().includes('google') || v.name.toLowerCase().includes('natural'))
+    ) ||
+    voices.find((v) => v.lang.startsWith('id') || v.lang.includes('ID')) ||
+    voices.find((v) => v.name.toLowerCase().includes('indonesia'));
+
+  if (indo) {
+    cachedIndoVoice = indo;
+  }
+}
+
+// Attach voice loader listener
+if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+  loadVoices();
+  if (window.speechSynthesis.onvoiceschanged !== undefined) {
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+  }
+}
 
 export function setAudioMuted(muted: boolean): void {
   isAudioMuted = muted;
   if (typeof window !== 'undefined' && muted && 'speechSynthesis' in window) {
     window.speechSynthesis.cancel();
+    activeUtterances.length = 0;
   }
 }
 
@@ -17,18 +53,34 @@ export function getAudioMuted(): boolean {
 
 export type ChimeType = 'new_ticket' | 'call_pit' | 'wash_done' | 'paid_pickup' | 'test';
 
+let globalAudioCtx: AudioContext | null = null;
+
+function getAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    if (!globalAudioCtx) {
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (AudioContextClass) {
+        globalAudioCtx = new AudioContextClass();
+      }
+    }
+    if (globalAudioCtx && globalAudioCtx.state === 'suspended') {
+      globalAudioCtx.resume().catch(() => {});
+    }
+    return globalAudioCtx;
+  } catch {
+    return null;
+  }
+}
+
 export function playAudioChime(type: ChimeType = 'test'): void {
   if (isAudioMuted) return;
   try {
-    const AudioContextClass =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextClass) return;
+    const ctx = getAudioContext();
+    if (!ctx) return;
 
-    const ctx = new AudioContextClass();
-    if (ctx.state === 'suspended') {
-      ctx.resume();
-    }
     const now = ctx.currentTime;
 
     if (type === 'new_ticket') {
@@ -129,57 +181,138 @@ export function playAirportChime(): void {
 }
 
 /**
+ * Phonetically formats Indonesian queue numbers for smooth, natural pronunciation.
+ * E.g., "A-001" -> "A, kosong kosong satu" or "B-012" -> "B, kosong satu dua"
+ */
+export function formatSpokenIndonesian(rawText: string): string {
+  return rawText
+    // Format queue ticket codes like A-001, B-012, M-103
+    .replace(/\b([A-Za-z])[- ]?0*(\d+)\b/g, (_match, letter, numStr) => {
+      const spelledDigits = numStr
+        .split('')
+        .map((d: string) => {
+          const map: Record<string, string> = {
+            '0': 'nol',
+            '1': 'satu',
+            '2': 'dua',
+            '3': 'tiga',
+            '4': 'empat',
+            '5': 'lima',
+            '6': 'enam',
+            '7': 'tujuh',
+            '8': 'delapan',
+            '9': 'sembilan'
+          };
+          return map[d] || d;
+        })
+        .join(' ');
+      return `${letter.toUpperCase()}, ${spelledDigits}`;
+    })
+    .replace(/Pit Bay (\d+)/gi, 'Pit Bay $1')
+    .replace(/Pit (\d+)/gi, 'Pit $1');
+}
+
+let speechTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
  * Enhanced voice announcement with distinct tones, pitch and rates depending on the event
  */
 export function announceQueueVoice(
   text: string,
   type: ChimeType = 'test',
-  options?: { rate?: number; pitch?: number }
+  options?: { rate?: number; pitch?: number; skipChime?: boolean }
 ): void {
   if (isAudioMuted) return;
 
-  // Play specialized chime first
-  playAudioChime(type);
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
-  const delay = type === 'new_ticket' ? 550 : 700;
+  // Clear pending announcement timeout if any
+  if (speechTimeoutTimer) {
+    clearTimeout(speechTimeoutTimer);
+    speechTimeoutTimer = null;
+  }
 
-  setTimeout(() => {
+  // Cancel ongoing speech to prevent overlapping or stuck voice
+  try {
+    window.speechSynthesis.cancel();
+    activeUtterances.length = 0;
+  } catch {
+    // ignore
+  }
+
+  // Play chime if not skipped
+  if (!options?.skipChime) {
+    playAudioChime(type);
+  }
+
+  const delay = options?.skipChime ? 0 : type === 'new_ticket' ? 450 : 600;
+
+  speechTimeoutTimer = setTimeout(() => {
     if (isAudioMuted) return;
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+
+    try {
+      // Ensure audio context and speech synthesis are active
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+
+      const spokenText = formatSpokenIndonesian(text);
+      const utterance = new SpeechSynthesisUtterance(spokenText);
       utterance.lang = 'id-ID';
 
       // Vary rate and pitch based on type to create distinct voices
       if (type === 'new_ticket') {
         utterance.rate = options?.rate ?? 0.95;
-        utterance.pitch = options?.pitch ?? 1.12; // Friendly, welcoming tone
+        utterance.pitch = options?.pitch ?? 1.1; // Friendly, welcoming tone
       } else if (type === 'call_pit') {
-        utterance.rate = options?.rate ?? 0.88;
+        utterance.rate = options?.rate ?? 0.9;
         utterance.pitch = options?.pitch ?? 1.02; // Clear, directive operational tone
       } else if (type === 'wash_done') {
-        utterance.rate = options?.rate ?? 0.9;
-        utterance.pitch = options?.pitch ?? 1.08; // Informative, pleasant customer notification
+        utterance.rate = options?.rate ?? 0.92;
+        utterance.pitch = options?.pitch ?? 1.06; // Informative, pleasant customer notification
       } else if (type === 'paid_pickup') {
         utterance.rate = options?.rate ?? 0.92;
         utterance.pitch = options?.pitch ?? 1.05; // Warm, appreciative checkout tone
       } else {
-        utterance.rate = options?.rate ?? 0.9;
+        utterance.rate = options?.rate ?? 0.92;
         utterance.pitch = options?.pitch ?? 1.0;
       }
 
-      const voices = window.speechSynthesis.getVoices();
-      const idVoice = voices.find(
-        (v) =>
-          v.lang.includes('id') ||
-          v.lang.includes('ID') ||
-          v.name.toLowerCase().includes('indonesia')
-      );
-      if (idVoice) {
-        utterance.voice = idVoice;
+      // Voice selection
+      if (!cachedIndoVoice) {
+        loadVoices();
+      }
+      if (cachedIndoVoice) {
+        utterance.voice = cachedIndoVoice;
+      } else {
+        const voices = window.speechSynthesis.getVoices();
+        const idVoice = voices.find(
+          (v) =>
+            v.lang.includes('id') ||
+            v.lang.includes('ID') ||
+            v.name.toLowerCase().includes('indonesia')
+        );
+        if (idVoice) {
+          utterance.voice = idVoice;
+          cachedIndoVoice = idVoice;
+        }
       }
 
+      // Keep in active array to prevent Chrome GC cutoff bug
+      activeUtterances.push(utterance);
+      utterance.onend = () => {
+        const idx = activeUtterances.indexOf(utterance);
+        if (idx !== -1) activeUtterances.splice(idx, 1);
+      };
+      utterance.onerror = () => {
+        const idx = activeUtterances.indexOf(utterance);
+        if (idx !== -1) activeUtterances.splice(idx, 1);
+      };
+
       window.speechSynthesis.speak(utterance);
+    } catch (err) {
+      console.warn('Speech synthesis error:', err);
     }
   }, delay);
 }

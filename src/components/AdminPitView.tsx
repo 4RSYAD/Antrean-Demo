@@ -73,7 +73,7 @@ export const AdminPitView: React.FC<AdminPitViewProps> = ({
         `Pengumuman selesai cuci: Nomor antrean ${target.nomor_antrian}, atas nama ${target.nama_pemohon}, ${vehName} Anda telah selesai dicuci. Silakan menuju kasir untuk proses pembayaran.`,
         'wash_done'
       );
-      if (target.email && onSendEmailNotification) {
+      if (target.email && onSendEmailNotification && target.is_paid) {
         onSendEmailNotification('completed_paid', target);
       }
     }

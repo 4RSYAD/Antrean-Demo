@@ -86,7 +86,7 @@ export const DashboardAdminView: React.FC<DashboardAdminViewProps> = ({
         `Pengumuman selesai cuci: Nomor antrean ${item.nomor_antrian}, atas nama ${item.nama_pemohon}, ${vehicleLabel} Anda telah selesai dicuci. Silakan menuju ke kasir untuk proses pembayaran.`,
         'wash_done'
       );
-      if (item.email && onSendEmailNotification) {
+      if (item.email && onSendEmailNotification && item.is_paid) {
         onSendEmailNotification('completed_paid', item);
       }
     } else if (item.status === 'done') {
@@ -95,7 +95,7 @@ export const DashboardAdminView: React.FC<DashboardAdminViewProps> = ({
         'paid_pickup'
       );
       if (item.email && onSendEmailNotification) {
-        onSendEmailNotification('completed_paid', item);
+        onSendEmailNotification('completed_paid', { ...item, is_paid: true });
       }
     } else {
       const pit = pits.find((p) => p.id === item.pit_id);

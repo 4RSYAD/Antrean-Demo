@@ -209,6 +209,32 @@ export async function seedInitialSupabaseData(): Promise<{ success: boolean; mes
   }
 }
 
+// ----------------- QUEUE CONTACT CACHE HELPER -----------------
+const QUEUE_CONTACT_CACHE_KEY = 'antrean_queue_contact_cache_v1';
+
+export function getStoredQueueEmails(): Record<string, { email?: string; phone?: string }> {
+  try {
+    const raw = localStorage.getItem(QUEUE_CONTACT_CACHE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveStoredQueueEmail(queueId: string, email?: string, phone?: string) {
+  try {
+    if (!queueId) return;
+    const cache = getStoredQueueEmails();
+    cache[queueId] = {
+      email: email !== undefined ? (email ? email.trim() : undefined) : cache[queueId]?.email,
+      phone: phone !== undefined ? (phone ? phone.trim() : undefined) : cache[queueId]?.phone
+    };
+    localStorage.setItem(QUEUE_CONTACT_CACHE_KEY, JSON.stringify(cache));
+  } catch (e) {
+    console.warn('Gagal menyimpan cache kontak antrean:', e);
+  }
+}
+
 // ----------------- DATA SYNC APIS (FULL SUPABASE) -----------------
 
 export async function syncQueuesFromSupabase(): Promise<QueueItem[] | null> {
@@ -219,13 +245,25 @@ export async function syncQueuesFromSupabase(): Promise<QueueItem[] | null> {
       .from('queues')
       .select('*')
       .order('created_at', { ascending: false });
+    
+    let rawList: any[] = [];
     if (error) {
       // Fallback in case created_at is stored differently
       const { data: fbData, error: fbErr } = await client.from('queues').select('*');
       if (fbErr) throw fbErr;
-      return (fbData as QueueItem[]) || [];
+      rawList = fbData || [];
+    } else {
+      rawList = data || [];
     }
-    return (data as QueueItem[]) || [];
+
+    const contactCache = getStoredQueueEmails();
+    const resolvedList: QueueItem[] = rawList.map((q: any) => ({
+      ...q,
+      email: q.email || contactCache[q.id]?.email || undefined,
+      phone: q.phone || contactCache[q.id]?.phone || undefined
+    }));
+
+    return resolvedList;
   } catch (err) {
     console.warn('Sync queues from Supabase error:', err);
     return null;
@@ -234,6 +272,12 @@ export async function syncQueuesFromSupabase(): Promise<QueueItem[] | null> {
 
 export async function upsertQueueToSupabase(item: QueueItem): Promise<boolean> {
   const client = getSupabaseClient();
+
+  // Always cache email and phone locally so data is never lost if Supabase table lacks columns
+  if (item.id && (item.email || item.phone)) {
+    saveStoredQueueEmail(item.id, item.email, item.phone);
+  }
+
   if (!client) return false;
   try {
     const payload: any = {
