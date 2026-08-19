@@ -7,8 +7,6 @@ import {
   Tv,
   Search,
   PlusCircle,
-  ChevronLeft,
-  ChevronRight,
   X,
   Droplets,
   Sun,
@@ -32,7 +30,7 @@ interface SidebarProps {
   isDarkMode: boolean;
   setIsDarkMode: (val: boolean) => void;
   sidebarCollapsed: boolean;
-  setSidebarCollapsed: (val: boolean) => void;
+  setSidebarCollapsed?: (val: boolean) => void;
   mobileDrawerOpen: boolean;
   setMobileDrawerOpen: (val: boolean) => void;
   waitingCount: number;
@@ -119,19 +117,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
 
-          <button
-            id="btn-toggle-collapse"
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="hidden lg:flex p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-[#161A28] text-slate-500 dark:text-slate-400 transition cursor-pointer"
-            title={sidebarCollapsed ? 'Perluas Sidebar' : 'Ciutkan Sidebar'}
-          >
-            {sidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-          </button>
-
+          {/* Mobile Close Button only (Desktop collapse button removed from sidebar as it's already in top bar) */}
           <button
             id="btn-close-mobile-drawer"
             onClick={() => setMobileDrawerOpen(false)}
             className="lg:hidden p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-[#161A28] text-slate-500 dark:text-slate-400 transition cursor-pointer"
+            aria-label="Tutup Menu"
           >
             <X className="w-5 h-5" />
           </button>
