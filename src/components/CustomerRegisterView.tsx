@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { PlusCircle, Sparkles, X, Clock, Bike, Car, Check, Mail } from 'lucide-react';
-import { ServiceItem, MotorType } from '../types.ts';
+import React, { useState, useEffect } from 'react';
+import { PlusCircle, Sparkles, X, Clock, Bike, Car, Check, Mail, UserCheck, ShieldCheck } from 'lucide-react';
+import { ServiceItem, MotorType, AuthUser } from '../types.ts';
 
 interface CustomerRegisterViewProps {
   services: ServiceItem[];
+  authUser?: AuthUser | null;
   onAddQueue: (data: {
     nama_pemohon: string;
     email?: string;
@@ -14,14 +15,27 @@ interface CustomerRegisterViewProps {
 
 export const CustomerRegisterView: React.FC<CustomerRegisterViewProps> = ({
   services,
+  authUser,
   onAddQueue
 }) => {
-  const [namaPemohon, setNamaPemohon] = useState('');
-  const [email, setEmail] = useState('');
+  const [namaPemohon, setNamaPemohon] = useState(authUser?.name || '');
+  const [email, setEmail] = useState(authUser?.email || '');
   const [tipeMotor, setTipeMotor] = useState<MotorType>('kecil');
   const [layananId, setLayananId] = useState(services[0]?.id || '');
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Sync with authUser whenever authUser changes
+  useEffect(() => {
+    if (authUser?.is_logged_in) {
+      if (authUser.name && !namaPemohon) {
+        setNamaPemohon(authUser.name);
+      }
+      if (authUser.email) {
+        setEmail(authUser.email);
+      }
+    }
+  }, [authUser]);
 
   const selectedService = services.find((s) => s.id === layananId) || services[0];
   const currentPrice = selectedService
@@ -40,18 +54,23 @@ export const CustomerRegisterView: React.FC<CustomerRegisterViewProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!namaPemohon.trim() || !layananId || isSubmitting) return;
+    const finalName = namaPemohon.trim() || authUser?.name || 'Pelanggan';
+    const finalEmail = (email.trim() || authUser?.email || '').trim() || undefined;
+
+    if (!finalName || !layananId || isSubmitting) return;
 
     setIsSubmitting(true);
     try {
       await onAddQueue({
-        nama_pemohon: namaPemohon.trim(),
-        email: email.trim() || undefined,
+        nama_pemohon: finalName,
+        email: finalEmail,
         tipe_motor: tipeMotor,
         layanan_id: layananId
       });
-      setNamaPemohon('');
-      setEmail('');
+      if (!authUser?.is_logged_in) {
+        setNamaPemohon('');
+        setEmail('');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -75,6 +94,29 @@ export const CustomerRegisterView: React.FC<CustomerRegisterViewProps> = ({
           </div>
         </div>
 
+        {/* Logged in auto-sync banner */}
+        {authUser?.is_logged_in && (
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center space-x-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500 text-slate-950 flex items-center justify-center font-bold shrink-0">
+                <UserCheck className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="font-extrabold text-emerald-950 dark:text-emerald-300 flex items-center space-x-1.5 truncate">
+                  <span>Terhubung Otomatis Akun Anda:</span>
+                  <span className="underline truncate">{authUser.email}</span>
+                </div>
+                <p className="text-[11px] text-emerald-800 dark:text-emerald-400">
+                  Semua notifikasi email (tiket, panggilan pit bay, kwitansi lunas) otomatis dikirim ke alamat email ini.
+                </p>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-full font-bold text-[10px] shrink-0 font-mono">
+              ✓ AUTO-SYNC
+            </span>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-5 text-xs font-semibold">
           {/* Input Nama Pelanggan */}
           <div>
@@ -92,15 +134,15 @@ export const CustomerRegisterView: React.FC<CustomerRegisterViewProps> = ({
             />
           </div>
 
-          {/* Input Email Pelanggan (Untuk Notifikasi Resend) */}
+          {/* Input Email Pelanggan (Otomatis dari Akun) */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-slate-800 dark:text-slate-200 font-bold flex items-center space-x-1.5">
                 <Mail className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                <span>Email Notifikasi Antrean (Opsional)</span>
+                <span>Email Notifikasi Antrean {authUser?.is_logged_in ? '(Otomatis dari Akun)' : '(Opsional)'}</span>
               </label>
               <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full">
-                Kirim Tiket & Update
+                {authUser?.is_logged_in ? '✓ Otomatis Aktif' : 'Kirim Tiket & Update'}
               </span>
             </div>
             <input
@@ -112,7 +154,9 @@ export const CustomerRegisterView: React.FC<CustomerRegisterViewProps> = ({
               className="w-full px-4 py-3 bg-slate-50 dark:bg-[#161A28] border border-slate-300 dark:border-[#23293D] rounded-2xl text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500 text-xs font-medium transition"
             />
             <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-              Notifikasi otomatis saat: Ambil Tiket &bull; Mau Dipanggil &bull; Sedang Dipanggil ke Pit &bull; Selesai Cuci & Pembayaran Lunas.
+              {authUser?.is_logged_in
+                ? 'Email akun Anda terisi otomatis. Anda dapat mengubahnya jika ingin mengirimkan notifikasi ke email lain.'
+                : 'Notifikasi otomatis saat: Ambil Tiket • Mau Dipanggil • Sedang Dipanggil ke Pit • Selesai Cuci & Pembayaran Lunas.'}
             </p>
           </div>
 

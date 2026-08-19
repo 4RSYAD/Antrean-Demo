@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { PlusCircle, X, Bike, Car, Check, Mail } from 'lucide-react';
-import { ServiceItem, PitItem, MotorType } from '../types.ts';
+import { PlusCircle, X, Bike, Car, Check, Mail, UserCheck, Users } from 'lucide-react';
+import { ServiceItem, PitItem, MotorType, AppUser } from '../types.ts';
 
 interface CashierAddModalProps {
   isOpen: boolean;
   onClose: () => void;
   services: ServiceItem[];
   pits: PitItem[];
+  users?: AppUser[];
   onAddQueue: (data: {
     nama_pemohon: string;
     email?: string;
@@ -21,6 +22,7 @@ export const CashierAddModal: React.FC<CashierAddModalProps> = ({
   onClose,
   services,
   pits,
+  users = [],
   onAddQueue
 }) => {
   const [nama, setNama] = useState('');
@@ -30,6 +32,13 @@ export const CashierAddModal: React.FC<CashierAddModalProps> = ({
   const [pitId, setPitId] = useState<string>('');
 
   if (!isOpen) return null;
+
+  const handleSelectCustomer = (u: AppUser) => {
+    setNama(u.name);
+    setEmail(u.email);
+  };
+
+  const registeredCustomers = users.filter((u) => u.email);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,6 +85,32 @@ export const CashierAddModal: React.FC<CashierAddModalProps> = ({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {registeredCustomers.length > 0 && (
+          <div className="space-y-1.5">
+            <label className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold flex items-center space-x-1">
+              <Users className="w-3 h-3 text-emerald-500" />
+              <span>Pilih Cepat dari Pelanggan Terdaftar:</span>
+            </label>
+            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1 bg-slate-50 dark:bg-[#161A28] rounded-xl border border-slate-200 dark:border-[#23293D]">
+              {registeredCustomers.slice(0, 8).map((u) => (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => handleSelectCustomer(u)}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition flex items-center space-x-1 cursor-pointer ${
+                    email === u.email
+                      ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                      : 'bg-white dark:bg-[#0F121C] text-slate-700 dark:text-slate-300 hover:bg-emerald-500/10 border border-slate-200 dark:border-[#23293D]'
+                  }`}
+                >
+                  <span>{u.name}</span>
+                  <span className="opacity-70 font-normal">({u.email})</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs font-semibold">
           {/* Nama Pelanggan */}

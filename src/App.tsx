@@ -521,11 +521,14 @@ export default function App() {
         : service.harga_kecil || service.harga || 0
       : 0;
 
+    const effectiveEmail = data.email?.trim() || (authUser?.is_logged_in ? authUser.email : undefined);
+    const effectiveName = data.nama_pemohon?.trim() || (authUser?.is_logged_in ? authUser.name : 'Pelanggan');
+
     const newQueue: QueueItem = {
       id: `q-${Date.now()}`,
       nomor_antrian,
-      nama_pemohon: data.nama_pemohon,
-      email: data.email ? data.email.trim() : undefined,
+      nama_pemohon: effectiveName,
+      email: effectiveEmail,
       phone: data.phone ? data.phone.trim() : undefined,
       tipe_motor: vehicleType,
       layanan_id: data.layanan_id,
@@ -1049,6 +1052,7 @@ export default function App() {
           {(!authUser?.is_logged_in || authUser?.role === 'pengguna') && currentView === 'register' && (
             <CustomerRegisterView
               services={services}
+              authUser={authUser}
               onAddQueue={async (data) => {
                 const created = await handleAddQueue(data);
                 setCurrentView('tv');
@@ -1074,6 +1078,7 @@ export default function App() {
         onClose={() => setIsCashierAddOpen(false)}
         services={services}
         pits={pits}
+        users={users}
         onAddQueue={handleAddQueue}
       />
 
