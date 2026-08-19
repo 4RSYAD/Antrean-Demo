@@ -12,9 +12,11 @@ import {
   AlertCircle,
   Check,
   Bike,
-  Car
+  Car,
+  Mail,
+  Send
 } from 'lucide-react';
-import { QueueItem, ServiceItem, PitItem, AdminView, QueueStatus } from '../types.ts';
+import { QueueItem, ServiceItem, PitItem, AdminView, QueueStatus, EmailNotificationType } from '../types.ts';
 import { announceQueueVoice } from '../utils/audio.ts';
 
 interface DashboardAdminViewProps {
@@ -28,6 +30,7 @@ interface DashboardAdminViewProps {
   searchQuery: string;
   setCurrentView: (view: AdminView) => void;
   onOpenQuickAddModal: () => void;
+  onSendEmailNotification?: (type: EmailNotificationType, queue: QueueItem) => void;
 }
 
 export const DashboardAdminView: React.FC<DashboardAdminViewProps> = ({
@@ -40,7 +43,8 @@ export const DashboardAdminView: React.FC<DashboardAdminViewProps> = ({
   onPrintReceipt,
   searchQuery,
   setCurrentView,
-  onOpenQuickAddModal
+  onOpenQuickAddModal,
+  onSendEmailNotification
 }) => {
   const [filterStatus, setFilterStatus] = useState<string>('all');
 
@@ -82,11 +86,17 @@ export const DashboardAdminView: React.FC<DashboardAdminViewProps> = ({
         `Pengumuman selesai cuci: Nomor antrean ${item.nomor_antrian}, atas nama ${item.nama_pemohon}, ${vehicleLabel} Anda telah selesai dicuci. Silakan menuju ke kasir untuk proses pembayaran.`,
         'wash_done'
       );
+      if (item.email && onSendEmailNotification) {
+        onSendEmailNotification('completed_paid', item);
+      }
     } else if (item.status === 'done') {
       announceQueueVoice(
         `Terima kasih. Nomor antrean ${item.nomor_antrian}, atas nama ${item.nama_pemohon}, pembayaran lunas dan ${vehicleLabel} Anda siap diambil.`,
         'paid_pickup'
       );
+      if (item.email && onSendEmailNotification) {
+        onSendEmailNotification('completed_paid', item);
+      }
     } else {
       const pit = pits.find((p) => p.id === item.pit_id);
       const pitName = pit ? pit.nama_pit : 'Area Pit Cuci';
@@ -94,6 +104,9 @@ export const DashboardAdminView: React.FC<DashboardAdminViewProps> = ({
         `Perhatian. Panggilan nomor antrean ${item.nomor_antrian}, atas nama ${item.nama_pemohon}, silakan membawa ${vehicleLabel} Anda menuju ke ${pitName}.`,
         'call_pit'
       );
+      if (item.email && onSendEmailNotification) {
+        onSendEmailNotification('calling_pit', item);
+      }
     }
   };
 

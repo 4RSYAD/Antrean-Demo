@@ -894,6 +894,7 @@ export default function App() {
                 searchQuery={searchQuery}
                 setCurrentView={setCurrentView as (view: AdminView) => void}
                 onOpenQuickAddModal={() => setIsCashierAddOpen(true)}
+                onSendEmailNotification={handleSendEmailNotification}
               />
             )}
 

@@ -57,6 +57,10 @@ export const AdminPitView: React.FC<AdminPitViewProps> = ({
       const vehName = getVehicleName(activeInPit);
       const msg = `Perhatian. Panggilan nomor antrean ${activeInPit.nomor_antrian}, atas nama ${activeInPit.nama_pemohon}, silakan membawa ${vehName} Anda menuju ke ${pitName}.`;
       announceQueueVoice(msg, 'call_pit');
+
+      if (activeInPit.email && onSendEmailNotification) {
+        onSendEmailNotification('calling_pit', activeInPit);
+      }
     }
   };
 
@@ -69,6 +73,9 @@ export const AdminPitView: React.FC<AdminPitViewProps> = ({
         `Pengumuman selesai cuci: Nomor antrean ${target.nomor_antrian}, atas nama ${target.nama_pemohon}, ${vehName} Anda telah selesai dicuci. Silakan menuju kasir untuk proses pembayaran.`,
         'wash_done'
       );
+      if (target.email && onSendEmailNotification) {
+        onSendEmailNotification('completed_paid', target);
+      }
     }
   };
 

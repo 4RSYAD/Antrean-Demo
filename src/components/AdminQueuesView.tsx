@@ -82,16 +82,25 @@ export const AdminQueuesView: React.FC<AdminQueuesViewProps> = ({
         `Perhatian. Panggilan nomor antrean ${item.nomor_antrian}, atas nama ${item.nama_pemohon}, silakan membawa ${vehicleLabel} Anda menuju ke ${pitName}.`,
         'call_pit'
       );
+      if (item.email && onSendEmailNotification) {
+        onSendEmailNotification('calling_pit', item);
+      }
     } else if (type === 'kasir') {
       announceQueueVoice(
         `Pengumuman selesai cuci: Nomor antrean ${item.nomor_antrian}, atas nama ${item.nama_pemohon}, ${vehicleLabel} Anda telah selesai dicuci. Silakan menuju kasir untuk proses pembayaran.`,
         'wash_done'
       );
+      if (item.email && onSendEmailNotification) {
+        onSendEmailNotification('completed_paid', item);
+      }
     } else {
       announceQueueVoice(
         `Terima kasih. Nomor antrean ${item.nomor_antrian}, atas nama ${item.nama_pemohon}, pembayaran lunas dan ${vehicleLabel} Anda siap diambil. Selamat jalan.`,
         'paid_pickup'
       );
+      if (item.email && onSendEmailNotification) {
+        onSendEmailNotification('completed_paid', item);
+      }
     }
   };
 
