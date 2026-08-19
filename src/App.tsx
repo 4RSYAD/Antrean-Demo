@@ -571,9 +571,28 @@ export default function App() {
     setQueues((prev) => prev.map((q) => (q.id === queueId ? updatedQueue : q)));
     upsertQueueToSupabase(updatedQueue);
 
-    // Auto-send Email Stage 3: calling_pit
+    // Auto-send Email Stage 3: calling_pit (saat masuk pit cuci)
     if (newStatus === 'washing' && updatedQueue.email) {
-      handleSendEmailNotification('calling_pit', updatedQueue, { silent: true });
+      handleSendEmailNotification('calling_pit', updatedQueue, { silent: false });
+
+      // Auto-send Email Stage 2: upcoming_call (peringatan untuk antrean berikutnya yang sedang menunggu)
+      const nextWaitingQueue = queues
+        .filter((q) => q.id !== queueId && q.status === 'waiting')
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0];
+
+      if (
+        nextWaitingQueue &&
+        nextWaitingQueue.email &&
+        nextWaitingQueue.last_email_sent !== 'upcoming_call' &&
+        nextWaitingQueue.last_email_sent !== 'calling_pit'
+      ) {
+        handleSendEmailNotification('upcoming_call', nextWaitingQueue, { silent: false });
+      }
+    }
+
+    // Auto-send Email Stage 4: completed_paid (jika status diset selesai & sudah lunas)
+    if (newStatus === 'done' && updatedQueue.is_paid && updatedQueue.email) {
+      handleSendEmailNotification('completed_paid', updatedQueue, { silent: false });
     }
 
     // Audio announcements
@@ -653,9 +672,9 @@ export default function App() {
     setQueues((prev) => prev.map((q) => (q.id === queueId ? updatedQueue : q)));
     upsertQueueToSupabase(updatedQueue);
 
-    // Auto-send Email Stage 4: completed_paid
+    // Auto-send Email Stage 4: completed_paid (kwitansi lunas)
     if (updatedQueue.email) {
-      handleSendEmailNotification('completed_paid', updatedQueue, { silent: true });
+      handleSendEmailNotification('completed_paid', updatedQueue, { silent: false });
     }
 
     setPaymentQueueData(null);
