@@ -34,6 +34,8 @@ export function getEmailTypeLabel(type: string): string {
       return 'Peringatan Mau Dipanggil';
     case 'calling_pit':
       return 'Sedang Dipanggil ke Pit';
+    case 'wash_finished':
+      return 'Pencucian Selesai (Ke Kasir)';
     case 'completed_paid':
       return 'Selesai & Lunas';
     default:
@@ -109,6 +111,20 @@ export function generateEmailHtml(payload: EmailNotificationPayload): {
       `;
       break;
 
+    case 'wash_finished':
+      subject = `[${storeName}] Pencucian Selesai! Antrean #${queueNo} Silakan Menuju Kasir`;
+      headline = 'Pencucian Kendaraan Anda Telah Selesai';
+      badgeText = `SELESAI DICUCI: ${queueNo}`;
+      badgeBg = '#0284C7';
+      mainMessage = `Halo <strong>${customerName}</strong>, kendaraan <strong>${vehicleLabel}</strong> Anda telah selesai dicuci dan dibersihkan oleh tim kami. Silakan menuju kasir untuk melakukan pembayaran dan pengambilan kendaraan.`;
+      alertBox = `
+        <div style="background-color: #F0F9FF; border-left: 4px solid #0284C7; padding: 14px 16px; border-radius: 8px; margin: 20px 0; color: #075985;">
+          <p style="margin: 0; font-size: 14px; font-weight: 700;">Status: Selesai Dicuci & Menuju Kasir</p>
+          <p style="margin: 4px 0 0 0; font-size: 13px; color: #0369A1;">Total Tagihan: <strong>${costStr}</strong>. Petugas kasir kami siap melayani Anda.</p>
+        </div>
+      `;
+      break;
+
     case 'completed_paid':
       subject = `[${storeName}] Kwitansi Lunas & Cuci Selesai - Antrean #${queueNo}`;
       headline = 'Pencucian Selesai & Pembayaran LUNAS';
@@ -132,6 +148,8 @@ export function generateEmailHtml(payload: EmailNotificationPayload): {
     ? 'Belum Bayar (Bayar di kasir setelah selesai cuci)'
     : type === 'calling_pit'
     ? 'Belum Bayar (Menunggu proses cuci selesai)'
+    : type === 'wash_finished'
+    ? 'Menunggu Pembayaran di Kasir'
     : 'Belum Bayar (Silakan menuju kasir)';
   const paymentStatusColor = isPaidVerified ? '#059669' : '#D97706';
 
@@ -142,6 +160,8 @@ export function generateEmailHtml(payload: EmailNotificationPayload): {
       ? 'Persiapan (Sisa 1 Antrean Sebelum Giliran Anda)'
       : type === 'calling_pit'
       ? `Sedang Dipanggil ke ${pitName}`
+      : type === 'wash_finished'
+      ? 'Pencucian Selesai (Menuju Kasir)'
       : 'Selesai Cuci & Kendaraan Siap Diambil';
 
   const paymentTimeStr = isPaidVerified

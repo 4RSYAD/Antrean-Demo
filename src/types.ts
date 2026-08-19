@@ -66,7 +66,8 @@ export type EmailNotificationType =
   | 'ticket_created'    // 1. Berhasil ambil antrean
   | 'upcoming_call'      // 2. Antrean mau dipanggil (peringatan persiapan)
   | 'calling_pit'        // 3. Antrean sedang dipanggil masuk ke pit
-  | 'completed_paid';    // 4. Antrean selesai & sudah membayar
+  | 'wash_finished'     // 4. Pencucian selesai (pemberitahuan menuju kasir)
+  | 'completed_paid';    // 5. Antrean selesai & pembayaran lunas (kwitansi)
 
 export interface EmailNotificationPayload {
   to: string;

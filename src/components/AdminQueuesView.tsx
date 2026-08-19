@@ -94,8 +94,8 @@ export const AdminQueuesView: React.FC<AdminQueuesViewProps> = ({
         `Pengumuman selesai cuci: Nomor antrean ${item.nomor_antrian}, atas nama ${item.nama_pemohon}, ${vehicleLabel} Anda telah selesai dicuci. Silakan menuju kasir untuk proses pembayaran.`,
         'wash_done'
       );
-      if (item.email && onSendEmailNotification && item.is_paid) {
-        onSendEmailNotification('completed_paid', item);
+      if (item.email && onSendEmailNotification) {
+        onSendEmailNotification(item.is_paid ? 'completed_paid' : 'wash_finished', item);
       }
     } else {
       announceQueueVoice(
@@ -648,13 +648,25 @@ export const AdminQueuesView: React.FC<AdminQueuesViewProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => {
+                                    onSendEmailNotification('wash_finished', item);
+                                    setActiveEmailMenuId(null);
+                                  }}
+                                  className="w-full text-left px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-[#161A28] rounded-xl text-[11px] font-bold text-slate-800 dark:text-slate-200 flex items-center space-x-2 cursor-pointer transition"
+                                >
+                                  <span className="w-2 h-2 rounded-full bg-cyan-500"></span>
+                                  <span>4. Selesai Cuci (Ke Kasir)</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
                                     onSendEmailNotification('completed_paid', item);
                                     setActiveEmailMenuId(null);
                                   }}
                                   className="w-full text-left px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-[#161A28] rounded-xl text-[11px] font-bold text-slate-800 dark:text-slate-200 flex items-center space-x-2 cursor-pointer transition"
                                 >
                                   <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
-                                  <span>4. Selesai & Lunas</span>
+                                  <span>5. Selesai & Lunas</span>
                                 </button>
                               </div>
                             )}

@@ -612,9 +612,13 @@ export default function App() {
       }
     }
 
-    // Auto-send Email Stage 4: completed_paid (jika status diset selesai & sudah lunas)
-    if (newStatus === 'done' && updatedQueue.is_paid && updatedQueue.email) {
+    // Auto-send Email Stage 4: wash_finished (saat selesai dicuci & menunggu bayar di kasir)
+    if (newStatus === 'waiting_payment' && updatedQueue.email) {
+      handleSendEmailNotification('wash_finished', updatedQueue, { silent: false });
+    } else if (newStatus === 'done' && updatedQueue.is_paid && updatedQueue.email) {
       handleSendEmailNotification('completed_paid', updatedQueue, { silent: false });
+    } else if (newStatus === 'done' && !updatedQueue.is_paid && updatedQueue.email) {
+      handleSendEmailNotification('wash_finished', updatedQueue, { silent: false });
     }
 
     // Audio announcements

@@ -86,8 +86,8 @@ export const DashboardAdminView: React.FC<DashboardAdminViewProps> = ({
         `Pengumuman selesai cuci: Nomor antrean ${item.nomor_antrian}, atas nama ${item.nama_pemohon}, ${vehicleLabel} Anda telah selesai dicuci. Silakan menuju ke kasir untuk proses pembayaran.`,
         'wash_done'
       );
-      if (item.email && onSendEmailNotification && item.is_paid) {
-        onSendEmailNotification('completed_paid', item);
+      if (item.email && onSendEmailNotification) {
+        onSendEmailNotification(item.is_paid ? 'completed_paid' : 'wash_finished', item);
       }
     } else if (item.status === 'done') {
       announceQueueVoice(
