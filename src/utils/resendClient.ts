@@ -30,6 +30,28 @@ export async function sendEmailNotification(
       };
     }
 
+    // Pre-generate template HTML & subject on client
+    let precalculatedSubject = '';
+    let precalculatedHtml = '';
+    let precalculatedText = '';
+    try {
+      const t = generateEmailHtml(payload);
+      precalculatedSubject = t.subject;
+      precalculatedHtml = t.html;
+      precalculatedText = t.text;
+    } catch (tmplErr) {
+      console.warn('Template generation warning:', tmplErr);
+    }
+
+    const enhancedPayload = {
+      ...payload,
+      customSubject: precalculatedSubject,
+      customHtml: precalculatedHtml,
+      customText: precalculatedText,
+      apiKeyOverride: payload.storeSettings?.resend_api_key,
+      fromEmailOverride: payload.storeSettings?.resend_from_email
+    };
+
     // 1. Try serverless / backend API endpoint first (/api/send-email)
     let apiError: string | null = null;
     try {
@@ -38,32 +60,31 @@ export async function sendEmailNotification(
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(enhancedPayload)
       });
 
-      const contentType = response.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        const data = await response.json();
-        if (response.ok && data.success) {
-          return {
-            success: true,
-            message: `Email notifikasi berhasil dikirim ke ${payload.to}`,
-            data: data.data
-          };
-        }
-        apiError = data.error || 'Gagal mengirim notifikasi email';
+      const data = await response.json().catch(() => null);
+      if (response.ok && data?.success) {
+        return {
+          success: true,
+          message: `Email notifikasi berhasil dikirim ke ${payload.to}`,
+          data: data.data
+        };
+      }
+
+      if (data?.error) {
+        apiError = data.error;
       } else {
-        apiError = `Endpoint server mengembalikan status HTTP ${response.status}`;
+        apiError = `Server mengembalikan status HTTP ${response.status} (${response.statusText || 'Error'})`;
       }
     } catch (err: any) {
-      apiError = err.message || 'Gagal menghubungi server';
+      apiError = err.message || 'Gagal menghubungi server endpoint';
     }
 
     // 2. Direct Resend API fallback if custom API Key is configured in settings
     const apiKey = payload.storeSettings?.resend_api_key;
     if (apiKey && apiKey.trim()) {
       try {
-        const template = generateEmailHtml(payload);
         const storeName = payload.storeSettings?.nama_usaha || 'Antrean Cuci';
         const rawFrom = payload.storeSettings?.resend_from_email || 'notif@antrean.online';
         const fromEmail = rawFrom.includes('<') ? rawFrom : `${storeName} <${rawFrom}>`;
@@ -77,14 +98,14 @@ export async function sendEmailNotification(
           body: JSON.stringify({
             from: fromEmail,
             to: [payload.to.trim()],
-            subject: template.subject,
-            html: template.html,
-            text: template.text
+            subject: precalculatedSubject,
+            html: precalculatedHtml,
+            text: precalculatedText
           })
         });
 
-        const directData = await directRes.json();
-        if (directRes.ok && directData.id) {
+        const directData = await directRes.json().catch(() => null);
+        if (directRes.ok && directData?.id) {
           return {
             success: true,
             message: `Email notifikasi berhasil dikirim via Resend ke ${payload.to}`,
@@ -92,7 +113,7 @@ export async function sendEmailNotification(
           };
         }
 
-        if (directData.message) {
+        if (directData?.message) {
           return {
             success: false,
             message: directData.message,
