@@ -372,7 +372,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   ? 'Masuk ke Sistem Antrean'
                   : 'Registrasi Akun Pengguna'}
               </h2>
-              <p className="text-xs text-emerald-100 dark:text-slate-300 leading-relaxed mb-6">
+              <p className="text-xs text-emerald-100 dark:text-slate-300 leading-relaxed">
                 {authMode === 'login'
                   ? 'Gunakan akun terdaftar Anda untuk masuk ke sistem manajemen antrean cuci kendaraan.'
                   : 'Pendaftaran akun baru otomatis terdaftar sebagai Pengguna. Peran staf (Kasir, Operator, Administrator) akan diberikan oleh Admin melalui Manajemen Pengguna.'}

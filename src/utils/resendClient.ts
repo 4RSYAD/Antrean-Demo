@@ -1,4 +1,5 @@
 import { EmailNotificationPayload, QueueItem, ServiceItem, PitItem, StoreSettings, EmailNotificationType } from '../types.ts';
+import { generateEmailHtml } from './emailTemplates.ts';
 
 export interface SendEmailResult {
   success: boolean;
@@ -29,28 +30,84 @@ export async function sendEmailNotification(
       };
     }
 
-    const response = await fetch('/api/send-email', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
+    // 1. Try serverless / backend API endpoint first (/api/send-email)
+    let apiError: string | null = null;
+    try {
+      const response = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
 
-    const data = await response.json();
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const data = await response.json();
+        if (response.ok && data.success) {
+          return {
+            success: true,
+            message: `Email notifikasi berhasil dikirim ke ${payload.to}`,
+            data: data.data
+          };
+        }
+        apiError = data.error || 'Gagal mengirim notifikasi email';
+      } else {
+        apiError = `Endpoint server mengembalikan status HTTP ${response.status}`;
+      }
+    } catch (err: any) {
+      apiError = err.message || 'Gagal menghubungi server';
+    }
 
-    if (!response.ok || !data.success) {
-      return {
-        success: false,
-        message: data.error || 'Gagal mengirim notifikasi email',
-        error: data.error
-      };
+    // 2. Direct Resend API fallback if custom API Key is configured in settings
+    const apiKey = payload.storeSettings?.resend_api_key;
+    if (apiKey && apiKey.trim()) {
+      try {
+        const template = generateEmailHtml(payload);
+        const storeName = payload.storeSettings?.nama_usaha || 'Antrean Cuci';
+        const rawFrom = payload.storeSettings?.resend_from_email || 'notif@antrean.online';
+        const fromEmail = rawFrom.includes('<') ? rawFrom : `${storeName} <${rawFrom}>`;
+
+        const directRes = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey.trim()}`
+          },
+          body: JSON.stringify({
+            from: fromEmail,
+            to: [payload.to.trim()],
+            subject: template.subject,
+            html: template.html,
+            text: template.text
+          })
+        });
+
+        const directData = await directRes.json();
+        if (directRes.ok && directData.id) {
+          return {
+            success: true,
+            message: `Email notifikasi berhasil dikirim via Resend ke ${payload.to}`,
+            data: directData
+          };
+        }
+
+        if (directData.message) {
+          return {
+            success: false,
+            message: directData.message,
+            error: directData.message
+          };
+        }
+      } catch (directErr: any) {
+        console.warn('Direct Resend fallback failed:', directErr);
+      }
     }
 
     return {
-      success: true,
-      message: `Email notifikasi berhasil dikirim ke ${payload.to}`,
-      data: data.data
+      success: false,
+      message: apiError || 'Gagal mengirim email',
+      error: apiError || 'EMAIL_FAILED'
     };
   } catch (err: any) {
     return {

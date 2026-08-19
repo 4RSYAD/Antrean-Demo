@@ -22,7 +22,8 @@ import {
   UserCog,
   CheckCircle,
   Clock,
-  Sparkles
+  Sparkles,
+  RefreshCw
 } from 'lucide-react';
 import { AppUser, AppUserRole, AppUserStatus, AuthUser } from '../types.ts';
 
@@ -31,6 +32,7 @@ interface AdminUsersViewProps {
   onAddUser: (user: Omit<AppUser, 'id'>) => void;
   onUpdateUser: (id: string, updated: Partial<AppUser>) => void;
   onDeleteUser: (id: string) => void;
+  onRefreshUsers?: () => Promise<void>;
   authUser: AuthUser | null;
   showToast: (msg: string, type?: 'success' | 'warning' | 'info' | 'error') => void;
   isSupabaseConnected: boolean;
@@ -41,6 +43,7 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({
   onAddUser,
   onUpdateUser,
   onDeleteUser,
+  onRefreshUsers,
   authUser,
   showToast,
   isSupabaseConnected
@@ -48,6 +51,7 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | AppUserRole>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | AppUserStatus>('all');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -237,14 +241,37 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({
           </div>
         </div>
 
-        <button
-          id="btn-add-user"
-          onClick={openAddModal}
-          className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow-md hover:shadow-indigo-500/25 transition-all cursor-pointer"
-        >
-          <UserPlus className="w-4 h-4 mr-2" />
-          Tambah Pengguna Baru
-        </button>
+        <div className="flex items-center space-x-2">
+          {onRefreshUsers && (
+            <button
+              type="button"
+              id="btn-refresh-users"
+              disabled={isRefreshing}
+              onClick={async () => {
+                setIsRefreshing(true);
+                try {
+                  await onRefreshUsers();
+                } finally {
+                  setIsRefreshing(false);
+                }
+              }}
+              className="inline-flex items-center justify-center px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-[#161A28] dark:hover:bg-[#1E2337] text-slate-700 dark:text-slate-200 text-sm font-bold transition-all cursor-pointer disabled:opacity-50"
+              title="Sinkronkan data pengguna dengan Supabase Cloud"
+            >
+              <RefreshCw className={`w-4 h-4 mr-1.5 ${isRefreshing ? 'animate-spin text-indigo-500' : ''}`} />
+              <span>{isRefreshing ? 'Menyinkronkan...' : 'Sinkronkan'}</span>
+            </button>
+          )}
+
+          <button
+            id="btn-add-user"
+            onClick={openAddModal}
+            className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow-md hover:shadow-indigo-500/25 transition-all cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4 mr-2" />
+            Tambah Pengguna Baru
+          </button>
+        </div>
       </div>
 
       {/* Info Callout */}

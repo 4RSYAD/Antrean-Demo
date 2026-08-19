@@ -244,7 +244,16 @@ export default function App() {
         if (remoteQueues && remoteQueues.length > 0) setQueues(remoteQueues);
         if (remoteServices && remoteServices.length > 0) setServices(remoteServices);
         if (remotePits && remotePits.length > 0) setPits(remotePits);
-        if (remoteUsers && remoteUsers.length > 0) setUsers(remoteUsers);
+        if (remoteUsers && remoteUsers.length > 0) {
+          setUsers((prevLocalUsers) => {
+            const userMap = new Map<string, AppUser>();
+            // Keep local users first
+            prevLocalUsers.forEach((u) => userMap.set(u.email.toLowerCase(), u));
+            // Merge remote users
+            remoteUsers.forEach((u) => userMap.set(u.email.toLowerCase(), u));
+            return Array.from(userMap.values());
+          });
+        }
         if (remoteSettings) setSettings(remoteSettings);
       } catch (err) {
         console.warn('Error fetching initial Supabase data', err);
@@ -697,13 +706,42 @@ export default function App() {
   };
 
   // User Management CRUD
-  const handleAddUser = (newUserData: Omit<AppUser, 'id'>) => {
+  const handleAddUser = async (newUserData: Omit<AppUser, 'id'> & { id?: string }) => {
     const newUser: AppUser = {
       ...newUserData,
-      id: `usr-${Date.now()}`
+      id: newUserData.id || `usr-${Date.now()}`
     };
-    setUsers((prev) => [...prev, newUser]);
-    upsertUserToSupabase(newUser);
+    setUsers((prev) => {
+      const exists = prev.some(
+        (u) => u.id === newUser.id || u.email.toLowerCase() === newUser.email.toLowerCase()
+      );
+      if (exists) {
+        return prev.map((u) =>
+          u.id === newUser.id || u.email.toLowerCase() === newUser.email.toLowerCase() ? newUser : u
+        );
+      }
+      return [...prev, newUser];
+    });
+    await upsertUserToSupabase(newUser);
+  };
+
+  const handleRefreshUsers = async () => {
+    try {
+      const remoteUsers = await syncUsersFromSupabase();
+      if (remoteUsers && remoteUsers.length > 0) {
+        setUsers((prevLocalUsers) => {
+          const userMap = new Map<string, AppUser>();
+          prevLocalUsers.forEach((u) => userMap.set(u.email.toLowerCase(), u));
+          remoteUsers.forEach((u) => userMap.set(u.email.toLowerCase(), u));
+          return Array.from(userMap.values());
+        });
+        showToast(`Berhasil menyinkronkan ${remoteUsers.length} pengguna dari database Supabase!`, 'success');
+      } else {
+        showToast('Sinkronisasi selesai. Belum ada data pengguna tambahan di database.', 'info');
+      }
+    } catch (err: any) {
+      showToast(`Gagal menyinkronkan pengguna: ${err?.message || 'Error koneksi'}`, 'error');
+    }
   };
 
   const handleUpdateUser = (id: string, updated: Partial<AppUser>) => {
@@ -920,6 +958,7 @@ export default function App() {
               onAddUser={handleAddUser}
               onUpdateUser={handleUpdateUser}
               onDeleteUser={handleDeleteUser}
+              onRefreshUsers={handleRefreshUsers}
               authUser={authUser}
               showToast={showToast}
               isSupabaseConnected={isSupabaseConnected}

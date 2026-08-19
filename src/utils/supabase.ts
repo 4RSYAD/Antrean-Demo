@@ -449,7 +449,12 @@ export async function syncUsersFromSupabase(): Promise<AppUser[] | null> {
       .from('users')
       .select('*')
       .order('created_at', { ascending: true });
-    if (error) throw error;
+    if (error) {
+      // Fallback query without order in case created_at format or column differences
+      const { data: fbData, error: fbErr } = await client.from('users').select('*');
+      if (fbErr) throw fbErr;
+      return (fbData as AppUser[]) || [];
+    }
     return (data as AppUser[]) || [];
   } catch (err) {
     console.warn('Sync users from Supabase error:', err);
@@ -461,8 +466,26 @@ export async function upsertUserToSupabase(user: AppUser): Promise<boolean> {
   const client = getSupabaseClient();
   if (!client) return false;
   try {
-    const { error } = await client.from('users').upsert(user, { onConflict: 'id' });
-    if (error) throw error;
+    const payload: any = {
+      id: user.id,
+      name: user.name,
+      email: user.email.toLowerCase().trim(),
+      password: user.password || 'admin123',
+      role: user.role || 'pengguna',
+      status: user.status || 'aktif',
+      phone: user.phone || null,
+      is_email_verified: user.is_email_verified ?? true,
+      created_at: user.created_at || new Date().toISOString()
+    };
+    if (user.last_login) {
+      payload.last_login = user.last_login;
+    }
+    const { error } = await client.from('users').upsert(payload, { onConflict: 'id' });
+    if (error) {
+      // Retry with onConflict email if id conflict failed
+      const { error: err2 } = await client.from('users').upsert(payload, { onConflict: 'email' });
+      if (err2) throw err2;
+    }
     return true;
   } catch (err) {
     console.warn('Upsert user to Supabase error:', err);
@@ -810,5 +833,53 @@ ALTER PUBLICATION supabase_realtime ADD TABLE services;
 ALTER PUBLICATION supabase_realtime ADD TABLE pits;
 ALTER PUBLICATION supabase_realtime ADD TABLE users;
 ALTER PUBLICATION supabase_realtime ADD TABLE store_settings;
+
+-- ==========================================================
+-- 9. Sinkronisasi Otomatis Supabase Auth (auth.users) -> Tabel Users (public.users)
+-- ==========================================================
+CREATE OR REPLACE FUNCTION public.handle_new_auth_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.users (id, name, email, password, role, status, phone, is_email_verified, created_at)
+  VALUES (
+    new.id,
+    COALESCE(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
+    new.email,
+    'admin123',
+    'pengguna',
+    'aktif',
+    new.raw_user_meta_data->>'phone',
+    (new.email_confirmed_at IS NOT NULL),
+    NOW()
+  )
+  ON CONFLICT (id) DO UPDATE
+  SET
+    email = EXCLUDED.email,
+    name = COALESCE(NULLIF(EXCLUDED.name, ''), public.users.name),
+    phone = COALESCE(EXCLUDED.phone, public.users.phone),
+    is_email_verified = (new.email_confirmed_at IS NOT NULL);
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT OR UPDATE ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_auth_user();
+
+-- Salin seluruh user terdaftar dari auth.users yang belum masuk ke public.users
+INSERT INTO public.users (id, name, email, password, role, status, phone, is_email_verified, created_at)
+SELECT
+  id,
+  COALESCE(raw_user_meta_data->>'name', split_part(email, '@', 1)),
+  email,
+  'admin123',
+  'pengguna',
+  'aktif',
+  raw_user_meta_data->>'phone',
+  (email_confirmed_at IS NOT NULL),
+  created_at
+FROM auth.users
+ON CONFLICT (id) DO NOTHING;
 `;
 
