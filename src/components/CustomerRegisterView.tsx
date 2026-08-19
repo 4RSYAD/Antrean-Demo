@@ -22,7 +22,6 @@ export const CustomerRegisterView: React.FC<CustomerRegisterViewProps> = ({
   const [email, setEmail] = useState(authUser?.email || '');
   const [tipeMotor, setTipeMotor] = useState<MotorType>('kecil');
   const [layananId, setLayananId] = useState(services[0]?.id || '');
-  const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Sync with authUser whenever authUser changes
@@ -256,41 +255,77 @@ export const CustomerRegisterView: React.FC<CustomerRegisterViewProps> = ({
             </div>
           </div>
 
-          {/* Selected Service Box */}
-          <div>
-            <label className="block text-slate-800 dark:text-slate-200 mb-1.5 font-bold">
-              Paket Layanan Terpilih *
-            </label>
+          {/* Service Selection Section */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-slate-800 dark:text-slate-200 font-bold">
+                Pilih Paket Layanan Cuci *
+              </label>
+              <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono font-bold">
+                Tarif disesuaikan: {getVehicleLabel(tipeMotor)}
+              </span>
+            </div>
 
-            <div className="p-4 bg-slate-50 dark:bg-[#161A28] border border-slate-200 dark:border-[#23293D] rounded-2xl flex items-center justify-between gap-3">
-              <div className="space-y-1 min-w-0 flex-1">
-                <div className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center space-x-2">
-                  <span className="truncate">{selectedService?.nama_layanan}</span>
-                  <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 px-2 py-0.5 rounded-md font-mono shrink-0">
-                    ~{selectedService?.durasi_menit} Mnt
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-600 dark:text-slate-400 line-clamp-2">
-                  {selectedService?.deskripsi}
-                </p>
-                <div className="flex items-center space-x-2 pt-1">
-                  <span className="text-emerald-700 dark:text-emerald-400 font-mono font-black text-base">
-                    Rp {currentPrice.toLocaleString('id-ID')}
-                  </span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-[#23293D] text-slate-800 dark:text-slate-200">
-                    Tarif {getVehicleLabel(tipeMotor)}
-                  </span>
-                </div>
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {services.map((s) => {
+                const isSelected = s.id === layananId;
+                const itemPrice = tipeMotor === 'mobil'
+                  ? s.harga_mobil || s.harga_besar || s.harga || 0
+                  : tipeMotor === 'besar'
+                  ? s.harga_besar || s.harga || 0
+                  : s.harga_kecil || s.harga || 0;
 
-              <button
-                id="btn-open-service-modal"
-                type="button"
-                onClick={() => setIsServiceModalOpen(true)}
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl text-xs transition shrink-0 cursor-pointer shadow-sm"
-              >
-                Ganti Paket
-              </button>
+                return (
+                  <div
+                    key={s.id}
+                    id={`service-select-${s.id}`}
+                    onClick={() => setLayananId(s.id)}
+                    className={`p-4 rounded-2xl border-2 transition cursor-pointer flex flex-col justify-between space-y-3 relative ${
+                      isSelected
+                        ? 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-600 dark:border-emerald-500 shadow-md ring-1 ring-emerald-500'
+                        : 'bg-slate-50 dark:bg-[#161A28] border-slate-200 dark:border-[#23293D] hover:border-emerald-500/40'
+                    }`}
+                  >
+                    {isSelected && (
+                      <span className="absolute top-3 right-3 w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                        <Check className="w-3.5 h-3.5" />
+                      </span>
+                    )}
+
+                    <div className="space-y-1.5 pr-6">
+                      <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                        <h4 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                          {s.nama_layanan}
+                        </h4>
+                        {s.badge && (
+                          <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700 text-[9px] font-black rounded-md font-mono">
+                            {s.badge}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-snug line-clamp-2">
+                        {s.deskripsi}
+                      </p>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-200 dark:border-[#23293D] flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <div className="text-base font-mono font-black text-emerald-700 dark:text-emerald-400">
+                          Rp {itemPrice.toLocaleString('id-ID')}
+                        </div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                          {getVehicleLabel(tipeMotor)}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-1 text-[11px] font-mono text-slate-600 dark:text-slate-400 bg-white dark:bg-[#0F121C] border border-slate-200 dark:border-[#23293D] px-2.5 py-1 rounded-xl">
+                        <Clock className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                        <span>~{s.durasi_menit} Mnt</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -323,101 +358,6 @@ export const CustomerRegisterView: React.FC<CustomerRegisterViewProps> = ({
           </div>
         </form>
       </div>
-
-      {/* Service Selection Modal */}
-      {isServiceModalOpen && (
-        <div
-          id="modal-select-service"
-          className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4"
-        >
-          <div className="bg-white dark:bg-[#0F121C] border border-slate-200 dark:border-[#23293D] max-w-lg w-full p-6 rounded-3xl space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-[#23293D] pb-3 shrink-0">
-              <div className="flex items-center space-x-2">
-                <Sparkles className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                <div>
-                  <h3 className="font-extrabold text-base text-slate-900 dark:text-white">Pilih Paket Layanan Cuci</h3>
-                  <p className="text-[11px] text-slate-600 dark:text-slate-400">
-                    Menampilkan tarif untuk: <strong className="text-emerald-600 dark:text-emerald-400 uppercase">{getVehicleLabel(tipeMotor)}</strong>
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsServiceModalOpen(false)}
-                className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-[#161A28] text-slate-400 hover:text-slate-700 dark:hover:text-white transition cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3 overflow-y-auto flex-1 pr-1">
-              {services.map((s) => {
-                const isSelected = s.id === layananId;
-                const itemPrice = tipeMotor === 'mobil'
-                  ? s.harga_mobil || s.harga_besar || s.harga || 0
-                  : tipeMotor === 'besar'
-                  ? s.harga_besar || s.harga || 0
-                  : s.harga_kecil || s.harga || 0;
-
-                return (
-                  <div
-                    key={s.id}
-                    id={`service-option-${s.id}`}
-                    onClick={() => {
-                      setLayananId(s.id);
-                      setIsServiceModalOpen(false);
-                    }}
-                    className={`p-4 rounded-2xl border-2 transition cursor-pointer flex flex-col justify-between space-y-3 ${
-                      isSelected
-                        ? 'bg-emerald-500/10 border-emerald-500 dark:border-emerald-500 shadow-md ring-1 ring-emerald-500'
-                        : 'bg-slate-50 dark:bg-[#161A28] border-slate-200 dark:border-[#23293D] hover:border-emerald-500/50'
-                    }`}
-                  >
-                    <div className="flex justify-between items-start gap-2">
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <h4 className="font-extrabold text-sm text-slate-900 dark:text-white">{s.nama_layanan}</h4>
-                          {s.badge && (
-                            <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700 text-[10px] font-black rounded-md">
-                              {s.badge}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{s.deskripsi}</p>
-                      </div>
-                      <span className="text-xs font-mono font-bold bg-slate-200 dark:bg-[#23293D] text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-full shrink-0 flex items-center space-x-1">
-                        <Clock className="w-3 h-3" />
-                        <span>{s.durasi_menit} Mnt</span>
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-[#23293D]">
-                      <div className="space-y-0.5">
-                        <span className="text-base font-mono font-black text-emerald-700 dark:text-emerald-400">
-                          Rp {itemPrice.toLocaleString('id-ID')}
-                        </span>
-                        <div className="text-[10px] text-slate-500 dark:text-slate-400 font-sans">
-                          Tarif {getVehicleLabel(tipeMotor)}
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        className={`px-4 py-1.5 text-xs font-bold rounded-full transition cursor-pointer ${
-                          isSelected
-                            ? 'bg-emerald-600 text-white font-black'
-                            : 'bg-slate-200 dark:bg-[#23293D] text-slate-800 dark:text-slate-200 hover:bg-emerald-600 hover:text-white'
-                        }`}
-                      >
-                        {isSelected ? 'Terpilih' : 'Pilih Paket'}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

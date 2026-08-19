@@ -49,7 +49,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     >
       <div
         id="payment-modal-card"
-        className="bg-white dark:bg-[#0F121C] border border-slate-200 dark:border-[#23293D] rounded-3xl max-w-md w-full p-6 sm:p-7 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200"
+        className="bg-white dark:bg-[#0F121C] border border-slate-200 dark:border-[#23293D] rounded-3xl max-w-md w-full p-5 sm:p-7 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-200 dark:border-[#23293D] pb-4">

@@ -66,7 +66,7 @@ export const CashierAddModal: React.FC<CashierAddModalProps> = ({
     >
       <div
         id="cashier-add-modal-box"
-        className="bg-white dark:bg-[#0F121C] border border-slate-200 dark:border-[#23293D] max-w-md w-full p-6 rounded-3xl space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200"
+        className="bg-white dark:bg-[#0F121C] border border-slate-200 dark:border-[#23293D] max-w-md w-full p-5 sm:p-6 rounded-3xl space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto"
       >
         <div className="flex items-center justify-between border-b border-slate-200 dark:border-[#23293D] pb-3">
           <div className="flex items-center space-x-2.5">
