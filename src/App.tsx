@@ -455,8 +455,8 @@ export default function App() {
         );
       }
     } else {
-      if (!options?.silent && res.error !== 'DISABLED') {
-        showToast(`Gagal mengirim email: ${res.message}`, 'error');
+      if (res.error !== 'DISABLED') {
+        showToast(`Notifikasi Email (${getEmailTypeLabel(type)}): ${res.message}`, 'warning');
       }
     }
   };
@@ -527,7 +527,7 @@ export default function App() {
 
     // Auto-send Email Stage 1: ticket_created
     if (newQueue.email) {
-      handleSendEmailNotification('ticket_created', newQueue, { silent: true });
+      handleSendEmailNotification('ticket_created', newQueue, { silent: false });
     }
 
     if (settings.auto_voice && !isMuted) {

@@ -106,8 +106,10 @@ export async function sendEmailNotification(
 
     return {
       success: false,
-      message: apiError || 'Gagal mengirim email',
-      error: apiError || 'EMAIL_FAILED'
+      message:
+        apiError ||
+        'Kunci RESEND_API_KEY belum dikonfigurasi. Silakan masukkan Resend API Key di menu Pengaturan Admin atau Environment Variables Vercel.',
+      error: apiError || 'NO_API_KEY'
     };
   } catch (err: any) {
     return {
